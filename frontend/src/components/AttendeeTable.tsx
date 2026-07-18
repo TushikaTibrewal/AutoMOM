@@ -72,9 +72,9 @@ export function AttendeeTable({ attendees, onChange }: Props) {
           const startIdx = hasHeader ? 1 : 0;
           for (let i = startIdx; i < rows.length; i++) {
             const row = rows[i];
-            if (!row || row.length === 0 || !row[0]) continue;
+            if (!row || row.length === 0) continue;
 
-            let name = String(row[0]).trim();
+            let name = "";
             let role = "";
             let department = "";
             let group: AttendeeGroup = "member";
@@ -117,6 +117,7 @@ export function AttendeeTable({ attendees, onChange }: Props) {
               }
             }
 
+            if (!name) continue;
             parsedAttendees.push({ name, role, department, group, present });
           }
 
@@ -158,9 +159,9 @@ export function AttendeeTable({ attendees, onChange }: Props) {
 
           for (let i = startIdx; i < lines.length; i++) {
             const parts = lines[i].split(",").map((p) => p.trim());
-            if (parts.length === 0 || !parts[0]) continue;
+            if (parts.length === 0) continue;
 
-            let name = parts[0];
+            let name = "";
             let role = "";
             let department = "";
             let group: AttendeeGroup = "member";
@@ -204,6 +205,7 @@ export function AttendeeTable({ attendees, onChange }: Props) {
               }
             }
 
+            if (!name) continue;
             parsedAttendees.push({ name, role, department, group, present });
           }
         } else {

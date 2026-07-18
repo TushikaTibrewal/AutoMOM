@@ -106,10 +106,11 @@ export default function NewMeetingPage() {
     }
     speech.stop();
     setGenerating(true);
+    const cleanAttendees = attendees.filter((a) => a.name.trim() !== "");
     try {
       const res = await api.generate({
         meeting: getValues(),
-        attendees,
+        attendees: cleanAttendees,
         transcript,
         template_slug: templateSlug,
       });
