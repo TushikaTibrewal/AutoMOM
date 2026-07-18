@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MoM — {{ meeting.title }}</title>
+<style>{{ styles }}</style>
+</head>
+<body>
+<header class="hero">
+  {% if logo_data_uri %}<img class="logo" src="{{ logo_data_uri }}" alt="Logo">{% endif %}
+  <div>
+    <p class="kicker">{{ meeting.organization or "Organization" }} · {{ meeting.meeting_type }}</p>
+    <h1>{{ meeting.title }}</h1>
+    <p class="meta-line">
+      {{ meeting.meeting_date or "—" }} · {{ meeting.meeting_time or "—" }} · {{ meeting.venue or "—" }}
+      · {{ attendee_stats.present }}/{{ attendee_stats.total }} present
+    </p>
+  </div>
+</header>
+
+{% if summary %}<p class="summary">{{ summary }}</p>{% endif %}
+
+<section>
+  <h2>Attendees</h2>
+  {% for group in attendee_groups %}
+  <p class="group-label">{{ group.label }}</p>
+  <table class="data-table">
+    <thead><tr><th>Name</th><th>Role</th><th>Department</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for a in group.attendees %}
+      <tr>
+        <td>{{ a.name }}</td><td>{{ a.role or "—" }}</td><td>{{ a.department or "—" }}</td>
+        <td><span class="pill {{ 'ok' if a.present else 'no' }}">{{ "Present" if a.present else "Absent" }}</span></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Agenda &amp; Discussion</h2>
+  {% for item in agenda %}
+  <div class="agenda-item">
+    <h3>{{ item.number }}. {{ item.title }}</h3>
+    {% for sub in item.subtopics %}<p class="subtopic">{{ sub.number }} — {{ sub.title }}</p>{% endfor %}
+    {% if item.discussion %}
+    <ul>
+      {% for point in item.discussion %}<li>{{ point }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% if unassigned_discussion %}
+  <div class="agenda-item">
+    <h3>Other Discussion</h3>
+    <ul>{% for point in unassigned_discussion %}<li>{{ point }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+</section>
+
+{% if decisions %}
+<section>
+  <h2>Decisions</h2>
+  <table class="data-table">
+    <thead><tr><th>#</th><th>Decision</th><th>Decided By</th><th>Rationale</th></tr></thead>
+    <tbody>
+    {% for d in decisions %}
+      <tr><td>{{ d.number }}</td><td>{{ d.description }}</td><td>{{ d.decided_by }}</td><td>{{ d.rationale }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if action_items %}
+<section>
+  <h2>Action Items</h2>
+  <table class="data-table">
+    <thead><tr><th>#</th><th>Action</th><th>Owner</th><th>Due</th><th>Priority</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for a in action_items %}
+      <tr>
+        <td>{{ a.number }}</td><td>{{ a.description }}</td><td>{{ a.owner }}</td>
+        <td>{{ a.due_date }}</td><td>{{ a.priority }}</td><td>{{ a.status }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<footer class="signatures">
+  <div><span class="sig-label">Prepared by</span> {{ meeting.prepared_by or "—" }}</div>
+  <div><span class="sig-label">Approved by</span> {{ meeting.approved_by or "—" }}</div>
+</footer>
+</body>
+</html>

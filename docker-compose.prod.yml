@@ -1,0 +1,28 @@
+# Production overrides. Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Requires a .env with real secrets:
+#   JWT_SECRET_KEY   (>=32 random chars)   POSTGRES_PASSWORD
+#   OPENAI_API_KEY or GEMINI_API_KEY (optional; mock extractor used otherwise)
+#   PUBLIC_ORIGIN    (e.g. https://mom.example.com)
+services:
+  db:
+    restart: always
+    ports: []          # do not expose Postgres publicly
+
+  backend:
+    restart: always
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      CORS_ORIGINS: ${PUBLIC_ORIGIN}
+      PDF_ENGINE: weasyprint
+    volumes:
+      - exports:/app/exports          # drop the source bind-mount from base compose
+      - ./backend/templates:/app/templates:ro
+    ports: []          # only nginx/frontend is public-facing
+
+  frontend:
+    restart: always
+    ports:
+      - "80:80"

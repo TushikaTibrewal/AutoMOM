@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Minutes of Meeting — {{ meeting.title }}</title>
+<style>{{ styles }}</style>
+</head>
+<body>
+<header class="mom-header">
+  {% if logo_data_uri %}<img class="logo" src="{{ logo_data_uri }}" alt="Logo">{% endif %}
+  <div class="org-block">
+    <div class="org-name">{{ meeting.organization or "Organization" }}</div>
+    <div class="doc-title">MINUTES OF MEETING</div>
+  </div>
+</header>
+
+<table class="meta-table">
+  <tr><th>Meeting Title</th><td>{{ meeting.title }}</td><th>Meeting Type</th><td>{{ meeting.meeting_type }}</td></tr>
+  <tr><th>Date</th><td>{{ meeting.meeting_date or "—" }}</td><th>Time</th><td>{{ meeting.meeting_time or "—" }}</td></tr>
+  <tr><th>Venue</th><td>{{ meeting.venue or "—" }}</td><th>Attendance</th><td>{{ attendee_stats.present }} present / {{ attendee_stats.absent }} absent</td></tr>
+</table>
+
+{% if summary %}
+<section>
+  <h2>Summary</h2>
+  <p class="summary">{{ summary }}</p>
+</section>
+{% endif %}
+
+<section>
+  <h2>Attendees</h2>
+  {% for group in attendee_groups %}
+  <h3>{{ group.label }}</h3>
+  <table class="data-table">
+    <thead><tr><th class="col-num">#</th><th>Name</th><th>Role</th><th>Department</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for a in group.attendees %}
+      <tr>
+        <td class="col-num">{{ loop.index }}</td>
+        <td>{{ a.name }}</td>
+        <td>{{ a.role or "—" }}</td>
+        <td>{{ a.department or "—" }}</td>
+        <td class="{{ 'present' if a.present else 'absent' }}">{{ "Present" if a.present else "Absent" }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Agenda &amp; Discussion</h2>
+  {% for item in agenda %}
+  <div class="agenda-item">
+    <h3><span class="num">{{ item.number }}.</span> {{ item.title }}</h3>
+    {% if item.subtopics %}
+    <ul class="subtopics">
+      {% for sub in item.subtopics %}
+      <li><span class="num">{{ sub.number }}</span> {{ sub.title }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if item.discussion %}
+    <ul class="discussion">
+      {% for point in item.discussion %}
+      <li>{{ point }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% if unassigned_discussion %}
+  <div class="agenda-item">
+    <h3>Other Discussion</h3>
+    <ul class="discussion">
+      {% for point in unassigned_discussion %}
+      <li>{{ point }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</section>
+
+{% if decisions %}
+<section>
+  <h2>Decisions</h2>
+  <table class="data-table">
+    <thead><tr><th class="col-num">#</th><th>Decision</th><th>Decided By</th><th>Rationale</th></tr></thead>
+    <tbody>
+    {% for d in decisions %}
+      <tr><td class="col-num">{{ d.number }}</td><td>{{ d.description }}</td><td>{{ d.decided_by }}</td><td>{{ d.rationale }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if action_items %}
+<section>
+  <h2>Action Items</h2>
+  <table class="data-table">
+    <thead><tr><th class="col-num">#</th><th>Action</th><th>Owner</th><th>Due Date</th><th>Priority</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for a in action_items %}
+      <tr>
+        <td class="col-num">{{ a.number }}</td><td>{{ a.description }}</td><td>{{ a.owner }}</td>
+        <td>{{ a.due_date }}</td><td>{{ a.priority }}</td><td>{{ a.status }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<footer class="signatures">
+  <div class="sig-block">
+    <div class="sig-line"></div>
+    <div class="sig-name">{{ meeting.prepared_by or "—" }}</div>
+    <div class="sig-role">Prepared By</div>
+  </div>
+  <div class="sig-block">
+    <div class="sig-line"></div>
+    <div class="sig-name">{{ meeting.approved_by or "—" }}</div>
+    <div class="sig-role">Approved By</div>
+  </div>
+</footer>
+</body>
+</html>

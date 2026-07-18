@@ -1,0 +1,81 @@
+@page {
+  size: A4;
+  margin: 20mm 16mm 22mm 16mm;
+  @bottom-right {
+    content: "Page " counter(page) " / " counter(pages);
+    font-size: 8pt;
+    color: #94a3b8;
+    font-family: Helvetica, Arial, sans-serif;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 10pt;
+  color: #0f172a;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  border-left: 6px solid #4f46e5;
+  padding: 6px 0 6px 16px;
+  margin-bottom: 16px;
+}
+.hero .logo { height: 48px; width: auto; }
+.kicker { text-transform: uppercase; letter-spacing: 2px; font-size: 8pt; color: #4f46e5; margin: 0; }
+h1 { font-size: 17pt; margin: 2px 0; }
+.meta-line { color: #64748b; font-size: 9pt; margin: 0; }
+
+.summary {
+  background: #eef2ff;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #3730a3;
+  font-size: 9.5pt;
+}
+
+h2 {
+  font-size: 11pt;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #4f46e5;
+  margin: 20px 0 8px;
+}
+h3 { font-size: 10.5pt; margin: 10px 0 4px; }
+.group-label { font-weight: bold; color: #475569; margin: 10px 0 2px; font-size: 9pt; }
+.subtopic { margin: 2px 0 2px 12px; color: #334155; }
+
+.data-table { width: 100%; border-collapse: collapse; margin: 4px 0 10px; }
+.data-table th, .data-table td { padding: 6px 9px; text-align: left; vertical-align: top; }
+.data-table thead th {
+  font-size: 8.5pt;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #64748b;
+  border-bottom: 2px solid #4f46e5;
+}
+.data-table tbody td { border-bottom: 1px solid #e2e8f0; }
+
+.pill { padding: 2px 8px; border-radius: 999px; font-size: 8.5pt; font-weight: bold; }
+.pill.ok { background: #dcfce7; color: #166534; }
+.pill.no { background: #fee2e2; color: #991b1b; }
+
+.agenda-item { margin-bottom: 10px; page-break-inside: avoid; }
+ul { margin: 4px 0; padding-left: 18px; }
+li { margin: 3px 0; }
+
+.signatures {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 40px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  page-break-inside: avoid;
+}
+.sig-label { color: #64748b; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 1px; margin-right: 8px; }
