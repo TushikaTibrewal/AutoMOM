@@ -238,7 +238,6 @@ export function AttendeeTable({ attendees, onChange }: Props) {
           ref={fileInputRef}
           type="file"
           hidden
-          accept=".csv,.txt"
           onChange={handleFileUpload}
         />
       </div>
