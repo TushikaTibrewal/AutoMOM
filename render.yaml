@@ -1,0 +1,39 @@
+# Render blueprint — provisions the backend + Postgres in one shot.
+# Deploy: Render dashboard -> New -> Blueprint -> pick the AutoMOM repo.
+# Render reads this file, builds the Docker backend, and creates the database.
+services:
+  - type: web
+    name: automom-backend
+    runtime: docker
+    dockerfilePath: ./docker/backend.Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: automom-db
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true          # Render generates a strong 256-bit secret
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: PDF_ENGINE
+        value: weasyprint            # GTK libs are in the Docker image
+      - key: AI_PROVIDER
+        value: auto                  # mock extractor until a key is added
+      - key: OPENAI_API_KEY
+        sync: false                  # set in dashboard if using OpenAI
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false                  # set to your Vercel URL, e.g. https://automom.vercel.app
+
+databases:
+  - name: automom-db
+    plan: free
+    databaseName: automom
+    user: automom

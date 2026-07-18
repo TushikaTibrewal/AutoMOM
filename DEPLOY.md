@@ -35,12 +35,26 @@ or a localhost CORS origin (see `config.py::validate_for_production`).
 Put TLS in front (the host's managed certs, or Caddy/Traefik/nginx). Note the public backend
 URL — e.g. `https://api.automom.example.com`.
 
-### Managed PaaS shortcuts
-- **Render / Railway:** point the service at `docker/backend.Dockerfile`, add a managed
-  Postgres, set the env vars above. Add a Postgres → `DATABASE_URL` (format:
-  `postgresql+psycopg2://user:pass@host:5432/db`).
+### Fastest path — Render blueprint (recommended)
+The repo ships [render.yaml](render.yaml): it provisions the Docker backend **and** a managed
+Postgres, and auto-generates `JWT_SECRET_KEY`. No manual env wiring except CORS + AI keys.
+
+1. [Render dashboard](https://dashboard.render.com) → **New** → **Blueprint**
+2. Connect GitHub, pick `TushikaTibrewal/AutoMOM`
+3. Render reads `render.yaml`, creates `automom-backend` + `automom-db`, deploys
+4. After first deploy, set two env vars on the backend service:
+   - `CORS_ORIGINS` = your Vercel URL (e.g. `https://automom.vercel.app`)
+   - `OPENAI_API_KEY` or `GEMINI_API_KEY` (optional; mock extractor runs without them)
+5. Copy the backend URL (e.g. `https://automom-backend.onrender.com`) for the frontend.
+
+### Other PaaS
+- **Railway:** point the service at `docker/backend.Dockerfile`, add a managed Postgres, set
+  the env vars above. `DATABASE_URL` is injected automatically.
 - **Fly.io:** `fly launch` from `docker/backend.Dockerfile`, `fly postgres create`, set secrets
   with `fly secrets set JWT_SECRET_KEY=... `.
+
+The backend binds `$PORT` when the host provides one, and normalizes legacy `postgres://`
+connection strings automatically.
 
 ---
 
