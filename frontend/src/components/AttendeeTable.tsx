@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Trash2, UserPlus, Upload } from "lucide-react";
+import * as XLSX from "xlsx";
 import type { Attendee, AttendeeGroup } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
@@ -45,103 +46,186 @@ export function AttendeeTable({ attendees, onChange }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      if (!text) return;
 
-      const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-      const parsedAttendees: Attendee[] = [];
+    if (isExcel) {
+      reader.onload = (event) => {
+        try {
+          const data = new Uint8Array(event.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const rows = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 });
 
-      // Check if it's a CSV file with headers or commas
-      const firstLine = lines[0];
-      const isCsv = file.name.endsWith(".csv") || (firstLine && firstLine.includes(","));
+          const parsedAttendees: Attendee[] = [];
+          if (rows.length === 0) return;
 
-      if (isCsv && firstLine) {
-        // Simple CSV parser
-        let headers: string[] = [];
-        let startIdx = 0;
+          const firstRow = rows[0];
+          if (!firstRow) return;
 
-        // Try to identify header row
-        const firstLineParts = firstLine.split(",").map((p) => p.trim().toLowerCase());
-        const hasHeader = firstLineParts.some((p) =>
-          ["name", "role", "dept", "department", "group", "present"].includes(p)
-        );
+          const headers = firstRow.map((h: any) => String(h ?? "").trim().toLowerCase());
+          const hasHeader = headers.some((h: string) =>
+            ["name", "role", "dept", "department", "group", "present"].includes(h)
+          );
 
-        if (hasHeader) {
-          headers = firstLineParts;
-          startIdx = 1;
-        }
+          const startIdx = hasHeader ? 1 : 0;
+          for (let i = startIdx; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || row.length === 0 || !row[0]) continue;
 
-        for (let i = startIdx; i < lines.length; i++) {
-          const parts = lines[i].split(",").map((p) => p.trim());
-          if (parts.length === 0 || !parts[0]) continue;
+            let name = String(row[0]).trim();
+            let role = "";
+            let department = "";
+            let group: AttendeeGroup = "member";
+            let present = true;
 
-          let name = parts[0];
-          let role = "";
-          let department = "";
-          let group: AttendeeGroup = "member";
-          let present = true;
+            if (hasHeader) {
+              const nameIdx = headers.indexOf("name");
+              const roleIdx = headers.indexOf("role");
+              const deptIdx = headers.findIndex((h: string) => h === "dept" || h === "department");
+              const groupIdx = headers.indexOf("group");
+              const presentIdx = headers.indexOf("present");
 
-          if (hasHeader) {
-            const nameIdx = headers.indexOf("name");
-            const roleIdx = headers.indexOf("role");
-            const deptIdx = headers.findIndex((h) => h === "dept" || h === "department");
-            const groupIdx = headers.indexOf("group");
-            const presentIdx = headers.indexOf("present");
+              if (nameIdx !== -1 && row[nameIdx] !== undefined) name = String(row[nameIdx]).trim();
+              if (roleIdx !== -1 && row[roleIdx] !== undefined) role = String(row[roleIdx]).trim();
+              if (deptIdx !== -1 && row[deptIdx] !== undefined) department = String(row[deptIdx]).trim();
 
-            if (nameIdx !== -1 && parts[nameIdx]) name = parts[nameIdx];
-            if (roleIdx !== -1 && parts[roleIdx]) role = parts[roleIdx];
-            if (deptIdx !== -1 && parts[deptIdx]) department = parts[deptIdx];
-
-            if (groupIdx !== -1 && parts[groupIdx]) {
-              const g = parts[groupIdx].toLowerCase().replace(" ", "_");
-              if (["chairperson", "faculty", "core_team", "member", "guest"].includes(g)) {
-                group = g as AttendeeGroup;
+              if (groupIdx !== -1 && row[groupIdx] !== undefined) {
+                const g = String(row[groupIdx]).toLowerCase().replace(" ", "_").trim();
+                if (["chairperson", "faculty", "core_team", "member", "guest"].includes(g)) {
+                  group = g as AttendeeGroup;
+                }
+              }
+              if (presentIdx !== -1 && row[presentIdx] !== undefined) {
+                const pStr = String(row[presentIdx]).toLowerCase().trim();
+                present = pStr !== "false" && pStr !== "no" && pStr !== "0" && pStr !== "absent";
+              }
+            } else {
+              if (row[0] !== undefined) name = String(row[0]).trim();
+              if (row[1] !== undefined) role = String(row[1]).trim();
+              if (row[2] !== undefined) department = String(row[2]).trim();
+              if (row[3] !== undefined) {
+                const g = String(row[3]).toLowerCase().replace(" ", "_").trim();
+                if (["chairperson", "faculty", "core_team", "member", "guest"].includes(g)) {
+                  group = g as AttendeeGroup;
+                }
+              }
+              if (row[4] !== undefined) {
+                const pStr = String(row[4]).toLowerCase().trim();
+                present = pStr !== "false" && pStr !== "no" && pStr !== "0" && pStr !== "absent";
               }
             }
-            if (presentIdx !== -1 && parts[presentIdx]) {
-              const pStr = parts[presentIdx].toLowerCase();
-              present = pStr !== "false" && pStr !== "no" && pStr !== "0" && pStr !== "absent";
-            }
-          } else {
-            // Positional fallback
-            if (parts[0]) name = parts[0];
-            if (parts[1]) role = parts[1];
-            if (parts[2]) department = parts[2];
-            if (parts[3]) {
-              const g = parts[3].toLowerCase().replace(" ", "_");
-              if (["chairperson", "faculty", "core_team", "member", "guest"].includes(g)) {
-                group = g as AttendeeGroup;
-              }
-            }
-            if (parts[4]) {
-              const pStr = parts[4].toLowerCase();
-              present = pStr !== "false" && pStr !== "no" && pStr !== "0" && pStr !== "absent";
-            }
+
+            parsedAttendees.push({ name, role, department, group, present });
           }
 
-          parsedAttendees.push({ name, role, department, group, present });
+          if (parsedAttendees.length > 0) {
+            onChange([...attendees, ...parsedAttendees]);
+          }
+        } catch (err) {
+          console.error("Excel parse error", err);
         }
-      } else {
-        // Plain text: one name per line
-        for (const line of lines) {
-          if (!line) continue;
-          parsedAttendees.push({
-            name: line,
-            role: "",
-            department: "",
-            group: "member",
-            present: true,
-          });
-        }
-      }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        if (!text) return;
 
-      if (parsedAttendees.length > 0) {
-        onChange([...attendees, ...parsedAttendees]);
-      }
-    };
-    reader.readAsText(file);
+        const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+        const parsedAttendees: Attendee[] = [];
+
+        // Check if it's a CSV file with headers or commas
+        const firstLine = lines[0];
+        const isCsv = file.name.endsWith(".csv") || (firstLine && firstLine.includes(","));
+
+        if (isCsv && firstLine) {
+          // Simple CSV parser
+          let headers: string[] = [];
+          let startIdx = 0;
+
+          // Try to identify header row
+          const firstLineParts = firstLine.split(",").map((p) => p.trim().toLowerCase());
+          const hasHeader = firstLineParts.some((p) =>
+            ["name", "role", "dept", "department", "group", "present"].includes(p)
+          );
+
+          if (hasHeader) {
+            headers = firstLineParts;
+            startIdx = 1;
+          }
+
+          for (let i = startIdx; i < lines.length; i++) {
+            const parts = lines[i].split(",").map((p) => p.trim());
+            if (parts.length === 0 || !parts[0]) continue;
+
+            let name = parts[0];
+            let role = "";
+            let department = "";
+            let group: AttendeeGroup = "member";
+            let present = true;
+
+            if (hasHeader) {
+              const nameIdx = headers.indexOf("name");
+              const roleIdx = headers.indexOf("role");
+              const deptIdx = headers.findIndex((h) => h === "dept" || h === "department");
+              const groupIdx = headers.indexOf("group");
+              const presentIdx = headers.indexOf("present");
+
+              if (nameIdx !== -1 && parts[nameIdx]) name = parts[nameIdx];
+              if (roleIdx !== -1 && parts[roleIdx]) role = parts[roleIdx];
+              if (deptIdx !== -1 && parts[deptIdx]) department = parts[deptIdx];
+
+              if (groupIdx !== -1 && parts[groupIdx]) {
+                const g = parts[groupIdx].toLowerCase().replace(" ", "_");
+                if (["chairperson", "faculty", "core_team", "member", "guest"].includes(g)) {
+                  group = g as AttendeeGroup;
+                }
+              }
+              if (presentIdx !== -1 && parts[presentIdx]) {
+                const pStr = parts[presentIdx].toLowerCase();
+                present = pStr !== "false" && pStr !== "no" && pStr !== "0" && pStr !== "absent";
+              }
+            } else {
+              // Positional fallback
+              if (parts[0]) name = parts[0];
+              if (parts[1]) role = parts[1];
+              if (parts[2]) department = parts[2];
+              if (parts[3]) {
+                const g = parts[3].toLowerCase().replace(" ", "_");
+                if (["chairperson", "faculty", "core_team", "member", "guest"].includes(g)) {
+                  group = g as AttendeeGroup;
+                }
+              }
+              if (parts[4]) {
+                const pStr = parts[4].toLowerCase();
+                present = pStr !== "false" && pStr !== "no" && pStr !== "0" && pStr !== "absent";
+              }
+            }
+
+            parsedAttendees.push({ name, role, department, group, present });
+          }
+        } else {
+          // Plain text: one name per line
+          for (const line of lines) {
+            if (!line) continue;
+            parsedAttendees.push({
+              name: line,
+              role: "",
+              department: "",
+              group: "member",
+              present: true,
+            });
+          }
+        }
+
+        if (parsedAttendees.length > 0) {
+          onChange([...attendees, ...parsedAttendees]);
+        }
+      };
+      reader.readAsText(file);
+    }
     e.target.value = ""; // clear selection
   };
 
