@@ -13,7 +13,7 @@ import {
   Trash2,
   Undo2,
 } from "lucide-react";
-import type { ActionItem, Attendee, MeetingInfo, MeetingOut, Mom } from "@/types";
+import type { ActionItem, Attendee, Decision, MeetingInfo, MeetingOut, Mom } from "@/types";
 import { api, ApiError, downloadBlob } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -191,6 +191,37 @@ function Editor({
   const addAgenda = () =>
     setMom((m) => ({ ...m, agenda: [...m.agenda, { title: "New agenda item", subtopics: [] }] }));
 
+  const addSubtopic = (agendaIndex: number) =>
+    setMom((m) => ({
+      ...m,
+      agenda: m.agenda.map((a, j) =>
+        j === agendaIndex ? { ...a, subtopics: [...(a.subtopics || []), "New point"] } : a
+      ),
+    }));
+
+  const updateSubtopic = (agendaIndex: number, subtopicIndex: number, value: string) =>
+    setMom((m) => ({
+      ...m,
+      agenda: m.agenda.map((a, j) =>
+        j === agendaIndex
+          ? {
+              ...a,
+              subtopics: (a.subtopics || []).map((s, k) => (k === subtopicIndex ? value : s)),
+            }
+          : a
+      ),
+    }));
+
+  const deleteSubtopic = (agendaIndex: number, subtopicIndex: number) =>
+    setMom((m) => ({
+      ...m,
+      agenda: m.agenda.map((a, j) =>
+        j === agendaIndex
+          ? { ...a, subtopics: (a.subtopics || []).filter((_, k) => k !== subtopicIndex) }
+          : a
+      ),
+    }));
+
   // ---- discussion / decisions / actions
   const setDiscussion = (i: number, text: string) =>
     setMom((m) => ({
@@ -199,12 +230,36 @@ function Editor({
     }));
   const deleteDiscussion = (i: number) =>
     setMom((m) => ({ ...m, discussion_points: m.discussion_points.filter((_, j) => j !== i) }));
-
-  const setDecision = (i: number, description: string) =>
+  const addDiscussion = () =>
     setMom((m) => ({
       ...m,
-      decisions: m.decisions.map((d, j) => (j === i ? { ...d, description } : d)),
+      discussion_points: [
+        ...m.discussion_points,
+        { agenda_index: null, text: "" },
+      ],
     }));
+  const setDiscussionAgenda = (i: number, agenda_index: number | null) =>
+    setMom((m) => ({
+      ...m,
+      discussion_points: m.discussion_points.map((p, j) => (j === i ? { ...p, agenda_index } : p)),
+    }));
+
+  const addDecision = () =>
+    setMom((m) => ({
+      ...m,
+      decisions: [
+        ...m.decisions,
+        { description: "", decided_by: null, rationale: null },
+      ],
+    }));
+  const setDecision = useCallback(
+    (i: number, patch: Partial<Decision>) =>
+      setMom((m) => ({
+        ...m,
+        decisions: m.decisions.map((d, j) => (j === i ? { ...d, ...patch } : d)),
+      })),
+    [setMom],
+  );
   const deleteDecision = (i: number) =>
     setMom((m) => ({ ...m, decisions: m.decisions.filter((_, j) => j !== i) }));
 
@@ -271,26 +326,54 @@ function Editor({
                 <Plus className="h-4 w-4" /> Add
               </Button>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               {mom.agenda.map((item, i) => (
-                <motion.div key={i} layout className="flex items-center gap-2">
-                  <span className="w-6 shrink-0 text-sm font-semibold text-slate-400">{i + 1}.</span>
-                  <Input value={item.title} onChange={(e) => renameAgenda(i, e.target.value)} />
-                  <Button variant="ghost" size="icon" onClick={() => moveAgenda(i, -1)} disabled={i === 0} aria-label="Move up">
-                    <ArrowUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => moveAgenda(i, 1)}
-                    disabled={i === mom.agenda.length - 1}
-                    aria-label="Move down"
-                  >
-                    <ArrowDown className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => deleteAgenda(i)} aria-label="Delete">
-                    <Trash2 className="h-4 w-4 text-slate-400 hover:text-rose-500" />
-                  </Button>
+                <motion.div key={i} layout className="space-y-2 rounded-lg border border-slate-100 p-3 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 shrink-0 text-sm font-semibold text-slate-400">{i + 1}.</span>
+                    <Input value={item.title} onChange={(e) => renameAgenda(i, e.target.value)} />
+                    <Button variant="ghost" size="icon" onClick={() => moveAgenda(i, -1)} disabled={i === 0} aria-label="Move up">
+                      <ArrowUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => moveAgenda(i, 1)}
+                      disabled={i === mom.agenda.length - 1}
+                      aria-label="Move down"
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => deleteAgenda(i)} aria-label="Delete">
+                      <Trash2 className="h-4 w-4 text-slate-400 hover:text-rose-500" />
+                    </Button>
+                  </div>
+                  
+                  {/* Subtopics */}
+                  <div className="pl-8 space-y-1.5 border-l border-dashed border-slate-200 dark:border-slate-700 ml-3">
+                    {(item.subtopics || []).map((sub, j) => (
+                      <div key={j} className="flex items-center gap-2">
+                        <span className="w-8 shrink-0 text-xs font-semibold text-slate-400">{i + 1}.{j + 1}</span>
+                        <Input
+                          className="h-8 text-sm"
+                          value={sub}
+                          onChange={(e) => updateSubtopic(i, j, e.target.value)}
+                          placeholder="Subtopic / point title"
+                        />
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteSubtopic(i, j)} aria-label="Delete subtopic">
+                          <Trash2 className="h-3.5 w-3.5 text-slate-400 hover:text-rose-500" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
+                      onClick={() => addSubtopic(i)}
+                    >
+                      <Plus className="mr-1 h-3.5 w-3.5" /> Add subtopic/point
+                    </Button>
+                  </div>
                 </motion.div>
               ))}
               {mom.agenda.length === 0 && (
@@ -300,20 +383,44 @@ function Editor({
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Discussion points</CardTitle>
+              <Button variant="outline" size="sm" onClick={addDiscussion}>
+                <Plus className="h-4 w-4" /> Add
+              </Button>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               {mom.discussion_points.map((p, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <Textarea
-                    className="min-h-[44px]"
-                    value={p.text}
-                    onChange={(e) => setDiscussion(i, e.target.value)}
-                  />
-                  <Button variant="ghost" size="icon" onClick={() => deleteDiscussion(i)} aria-label="Delete">
-                    <Trash2 className="h-4 w-4 text-slate-400 hover:text-rose-500" />
-                  </Button>
+                <div key={i} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <Textarea
+                      className="min-h-[44px]"
+                      value={p.text}
+                      onChange={(e) => setDiscussion(i, e.target.value)}
+                      placeholder="Discussion point details"
+                    />
+                    <Button variant="ghost" size="icon" onClick={() => deleteDiscussion(i)} aria-label="Delete">
+                      <Trash2 className="h-4 w-4 text-slate-400 hover:text-rose-500" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500 shrink-0">Belongs to agenda:</span>
+                    <Select
+                      className="h-9 text-sm"
+                      value={p.agenda_index ?? ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setDiscussionAgenda(i, val === "" ? null : Number(val));
+                      }}
+                    >
+                      <option value="">General / Unassigned</option>
+                      {mom.agenda.map((item, idx) => (
+                        <option key={idx} value={idx}>
+                          {idx + 1}. {item.title}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
                 </div>
               ))}
               {mom.discussion_points.length === 0 && (
@@ -323,20 +430,38 @@ function Editor({
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Decisions</CardTitle>
+              <Button variant="outline" size="sm" onClick={addDecision}>
+                <Plus className="h-4 w-4" /> Add
+              </Button>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               {mom.decisions.map((d, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <Textarea
-                    className="min-h-[44px]"
-                    value={d.description}
-                    onChange={(e) => setDecision(i, e.target.value)}
-                  />
-                  <Button variant="ghost" size="icon" onClick={() => deleteDecision(i)} aria-label="Delete">
-                    <Trash2 className="h-4 w-4 text-slate-400 hover:text-rose-500" />
-                  </Button>
+                <div key={i} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <Textarea
+                      className="min-h-[44px]"
+                      value={d.description}
+                      onChange={(e) => setDecision(i, { description: e.target.value })}
+                      placeholder="Decision description"
+                    />
+                    <Button variant="ghost" size="icon" onClick={() => deleteDecision(i)} aria-label="Delete">
+                      <Trash2 className="h-4 w-4 text-slate-400 hover:text-rose-500" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Decided by (e.g. Board, Chairperson)"
+                      value={d.decided_by ?? ""}
+                      onChange={(e) => setDecision(i, { decided_by: e.target.value || null })}
+                    />
+                    <Input
+                      placeholder="Rationale"
+                      value={d.rationale ?? ""}
+                      onChange={(e) => setDecision(i, { rationale: e.target.value || null })}
+                    />
+                  </div>
                 </div>
               ))}
               {mom.decisions.length === 0 && <p className="text-sm text-slate-500">No decisions.</p>}

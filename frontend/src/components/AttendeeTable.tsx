@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Trash2, UserPlus } from "lucide-react";
+import { Trash2, UserPlus, Upload } from "lucide-react";
 import type { Attendee, AttendeeGroup } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
@@ -21,6 +21,7 @@ interface Props {
 /** Dynamic, virtualized attendee editor (smooth even with hundreds of rows). */
 export function AttendeeTable({ attendees, onChange }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const virtualizer = useVirtualizer({
     count: attendees.length,
     getScrollElement: () => parentRef.current,
@@ -38,6 +39,110 @@ export function AttendeeTable({ attendees, onChange }: Props) {
 
   const add = () => {
     onChange([...attendees, { name: "", role: "", department: "", present: true, group: "member" }]);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+
+      const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const parsedAttendees: Attendee[] = [];
+
+      // Check if it's a CSV file with headers or commas
+      const firstLine = lines[0];
+      const isCsv = file.name.endsWith(".csv") || (firstLine && firstLine.includes(","));
+
+      if (isCsv && firstLine) {
+        // Simple CSV parser
+        let headers: string[] = [];
+        let startIdx = 0;
+
+        // Try to identify header row
+        const firstLineParts = firstLine.split(",").map((p) => p.trim().toLowerCase());
+        const hasHeader = firstLineParts.some((p) =>
+          ["name", "role", "dept", "department", "group", "present"].includes(p)
+        );
+
+        if (hasHeader) {
+          headers = firstLineParts;
+          startIdx = 1;
+        }
+
+        for (let i = startIdx; i < lines.length; i++) {
+          const parts = lines[i].split(",").map((p) => p.trim());
+          if (parts.length === 0 || !parts[0]) continue;
+
+          let name = parts[0];
+          let role = "";
+          let department = "";
+          let group: AttendeeGroup = "member";
+          let present = true;
+
+          if (hasHeader) {
+            const nameIdx = headers.indexOf("name");
+            const roleIdx = headers.indexOf("role");
+            const deptIdx = headers.findIndex((h) => h === "dept" || h === "department");
+            const groupIdx = headers.indexOf("group");
+            const presentIdx = headers.indexOf("present");
+
+            if (nameIdx !== -1 && parts[nameIdx]) name = parts[nameIdx];
+            if (roleIdx !== -1 && parts[roleIdx]) role = parts[roleIdx];
+            if (deptIdx !== -1 && parts[deptIdx]) department = parts[deptIdx];
+
+            if (groupIdx !== -1 && parts[groupIdx]) {
+              const g = parts[groupIdx].toLowerCase().replace(" ", "_");
+              if (["chairperson", "faculty", "core_team", "member", "guest"].includes(g)) {
+                group = g as AttendeeGroup;
+              }
+            }
+            if (presentIdx !== -1 && parts[presentIdx]) {
+              const pStr = parts[presentIdx].toLowerCase();
+              present = pStr !== "false" && pStr !== "no" && pStr !== "0" && pStr !== "absent";
+            }
+          } else {
+            // Positional fallback
+            if (parts[0]) name = parts[0];
+            if (parts[1]) role = parts[1];
+            if (parts[2]) department = parts[2];
+            if (parts[3]) {
+              const g = parts[3].toLowerCase().replace(" ", "_");
+              if (["chairperson", "faculty", "core_team", "member", "guest"].includes(g)) {
+                group = g as AttendeeGroup;
+              }
+            }
+            if (parts[4]) {
+              const pStr = parts[4].toLowerCase();
+              present = pStr !== "false" && pStr !== "no" && pStr !== "0" && pStr !== "absent";
+            }
+          }
+
+          parsedAttendees.push({ name, role, department, group, present });
+        }
+      } else {
+        // Plain text: one name per line
+        for (const line of lines) {
+          if (!line) continue;
+          parsedAttendees.push({
+            name: line,
+            role: "",
+            department: "",
+            group: "member",
+            present: true,
+          });
+        }
+      }
+
+      if (parsedAttendees.length > 0) {
+        onChange([...attendees, ...parsedAttendees]);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ""; // clear selection
   };
 
   return (
@@ -122,9 +227,21 @@ export function AttendeeTable({ attendees, onChange }: Props) {
         )}
       </div>
 
-      <Button variant="outline" size="sm" className="mt-3" onClick={add}>
-        <UserPlus className="h-4 w-4" /> Add attendee
-      </Button>
+      <div className="mt-3 flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={add}>
+          <UserPlus className="h-4 w-4" /> Add attendee
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+          <Upload className="h-4 w-4" /> Upload members list
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          hidden
+          accept=".csv,.txt"
+          onChange={handleFileUpload}
+        />
+      </div>
     </div>
   );
 }
