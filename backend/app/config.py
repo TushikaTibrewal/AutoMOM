@@ -56,22 +56,36 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.environment.lower() in ("production", "prod")
 
-    def validate_for_production(self) -> None:
-        """Refuse to run in production with insecure defaults."""
-        problems = []
+    def validate_for_production(self) -> list[str]:
+        """Refuse to boot on secret-critical misconfig; warn on the rest.
+
+        Returns non-fatal warnings so the caller can log them. Only a weak JWT
+        secret or DEBUG on are hard blockers — a CORS origin can be corrected
+        after first boot (you often need the deployed URL first), so it warns.
+        """
+        import logging
+
+        fatal = []
         if self.jwt_secret_key in ("", "change-me-in-production"):
-            problems.append("JWT_SECRET_KEY must be set to a strong random value")
+            fatal.append("JWT_SECRET_KEY must be set to a strong random value")
         if len(self.jwt_secret_key) < 32:
-            problems.append("JWT_SECRET_KEY must be at least 32 characters")
+            fatal.append("JWT_SECRET_KEY must be at least 32 characters")
         if self.debug:
-            problems.append("DEBUG must be false in production")
-        if any("localhost" in o for o in self.cors_origin_list):
-            problems.append("CORS_ORIGINS must not include localhost in production")
-        if problems:
+            fatal.append("DEBUG must be false in production")
+        if fatal:
             raise RuntimeError(
                 "Refusing to start in production with insecure configuration:\n  - "
-                + "\n  - ".join(problems)
+                + "\n  - ".join(fatal)
             )
+
+        warnings = []
+        if any("localhost" in o for o in self.cors_origin_list):
+            warnings.append("CORS_ORIGINS still includes localhost - set it to your frontend URL")
+        if not self.cors_origin_list:
+            warnings.append("CORS_ORIGINS is empty - the browser frontend will be blocked by CORS")
+        for w in warnings:
+            logging.getLogger("automom.config").warning(w)
+        return warnings
 
 
 @lru_cache

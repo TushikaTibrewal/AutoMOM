@@ -30,7 +30,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: CORS_ORIGINS
-        sync: false                  # set to your Vercel URL, e.g. https://automom.vercel.app
+        value: https://automom.vercel.app   # update to your actual Vercel URL after deploy
 
 databases:
   - name: automom-db
