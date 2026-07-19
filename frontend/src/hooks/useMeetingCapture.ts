@@ -25,6 +25,7 @@ export function useMeetingCapture({ onSegment, segmentMs = 6000, captureMic = tr
   const [error, setError] = useState<string | null>(null);
 
   const displayStreamRef = useRef<MediaStream | null>(null);
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -43,6 +44,10 @@ export function useMeetingCapture({ onSegment, segmentMs = 6000, captureMic = tr
     displayStreamRef.current?.getTracks().forEach((t) => t.stop());
     micStreamRef.current?.getTracks().forEach((t) => t.stop());
     audioCtxRef.current?.close().catch(() => {});
+    if (videoElRef.current) {
+      videoElRef.current.srcObject = null;
+      videoElRef.current = null;
+    }
     displayStreamRef.current = null;
     micStreamRef.current = null;
     audioCtxRef.current = null;
@@ -90,6 +95,14 @@ export function useMeetingCapture({ onSegment, segmentMs = 6000, captureMic = tr
       });
       displayStreamRef.current = display;
 
+      // Hidden <video> playing the shared tab — used to grab frames for the
+      // vision-based participant reader.
+      const video = document.createElement("video");
+      video.srcObject = new MediaStream(display.getVideoTracks());
+      video.muted = true;
+      video.play().catch(() => {});
+      videoElRef.current = video;
+
       if (display.getAudioTracks().length === 0) {
         cleanup();
         setError(
@@ -133,5 +146,20 @@ export function useMeetingCapture({ onSegment, segmentMs = 6000, captureMic = tr
 
   const stop = useCallback(() => cleanup(), [cleanup]);
 
-  return { active, error, start, stop };
+  /** Grab the current shared-tab frame as a JPEG for participant detection. */
+  const captureFrame = useCallback(async (): Promise<Blob | null> => {
+    const video = videoElRef.current;
+    if (!video || !video.videoWidth) return null;
+    const canvas = document.createElement("canvas");
+    // Cap width to keep the upload small; vision models don't need full res.
+    const scale = Math.min(1, 1280 / video.videoWidth);
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.7));
+  }, []);
+
+  return { active, error, start, stop, captureFrame };
 }

@@ -192,6 +192,12 @@ export const api = {
     if (language) form.append("language", language);
     return request<{ text: string }>("/api/transcribe-audio", { method: "POST", body: form });
   },
+
+  detectParticipants: (frame: Blob) => {
+    const form = new FormData();
+    form.append("file", frame, "frame.jpg");
+    return request<{ names: string[] }>("/api/detect-participants", { method: "POST", body: form });
+  },
 };
 
 export function downloadBlob(blob: Blob, filename: string) {

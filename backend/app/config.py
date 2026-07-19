@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
     groq_whisper_model: str = "whisper-large-v3-turbo"  # live audio transcription
+    groq_vision_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"  # read Meet roster
     ai_max_retries: int = 3
     ai_timeout_seconds: int = 60
 

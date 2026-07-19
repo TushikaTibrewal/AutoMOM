@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from app.config import get_settings
 from app.models import User
 from app.services.transcribe_service import TranscriptionUnavailableError, transcribe_audio
+from app.services.vision_service import detect_participants
 from app.utils.sanitize import sanitize_text
 from app.utils.security import get_current_user
 
@@ -82,3 +83,20 @@ def transcribe_audio_segment(
     except TranscriptionUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     return {"text": sanitize_text(text)}
+
+
+@router.post("/detect-participants")
+def detect_participants_endpoint(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Read participant names from a meeting-screen frame (Groq vision).
+
+    Best-effort: returns an empty list rather than erroring so live capture is
+    never interrupted by a vision hiccup or missing key.
+    """
+    raw = file.file.read(MAX_AUDIO_BYTES + 1)
+    if not raw or len(raw) > MAX_AUDIO_BYTES:
+        return {"names": []}
+    names = [sanitize_text(n) for n in detect_participants(raw, file.content_type or "image/jpeg")]
+    return {"names": [n for n in names if n]}

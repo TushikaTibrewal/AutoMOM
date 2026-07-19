@@ -137,6 +137,28 @@ export default function LiveMeetingPage() {
     return () => window.clearInterval(timer);
   }, [phase, runExtract]);
 
+  // Read the Meet/Zoom roster off the shared screen every ~20s (vision).
+  const detectFromScreen = useCallback(async () => {
+    try {
+      const frame = await capture.captureFrame();
+      if (!frame) return;
+      const { names } = await api.detectParticipants(frame);
+      mergeParticipants(names);
+    } catch {
+      /* best-effort; ignore */
+    }
+  }, [capture, mergeParticipants]);
+
+  useEffect(() => {
+    if (phase !== "recording") return;
+    const timer = window.setInterval(detectFromScreen, 20000);
+    const first = window.setTimeout(detectFromScreen, 4000); // once shortly after start
+    return () => {
+      window.clearInterval(timer);
+      window.clearTimeout(first);
+    };
+  }, [phase, detectFromScreen]);
+
   useEffect(() => () => capture.stop(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startMeeting = async () => {
