@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     require_email_verification: bool = False  # if True, unverified users cannot log in
     verification_token_ttl_hours: int = 48
 
+    # SMTP (Alternative to Resend)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
