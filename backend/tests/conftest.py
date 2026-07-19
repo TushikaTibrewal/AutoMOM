@@ -35,7 +35,12 @@ def auth_headers(client):
         json={"email": "test@example.com", "full_name": "Test User", "password": "password123"},
     )
     assert res.status_code == 201, res.text
-    token = res.json()["access_token"]
+    login_res = client.post(
+        "/api/auth/login",
+        json={"email": "test@example.com", "password": "password123"},
+    )
+    assert login_res.status_code == 200, login_res.text
+    token = login_res.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 

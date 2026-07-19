@@ -70,9 +70,13 @@ def test_meeting_search(client, auth_headers, sample_payload):
 
 def test_meeting_isolation_between_users(client, auth_headers, sample_payload):
     gen = client.post("/api/generate", json=sample_payload, headers=auth_headers).json()
-    other = client.post(
+    client.post(
         "/api/auth/register",
         json={"email": "other@example.com", "full_name": "Other", "password": "password123"},
+    )
+    other = client.post(
+        "/api/auth/login",
+        json={"email": "other@example.com", "password": "password123"},
     ).json()
     other_headers = {"Authorization": f"Bearer {other['access_token']}"}
     res = client.get(f"/api/meetings/{gen['meeting_id']}", headers=other_headers)

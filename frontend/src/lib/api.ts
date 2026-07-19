@@ -109,7 +109,7 @@ async function requestBlob(path: string, options: RequestInit = {}): Promise<{ b
 
 export const api = {
   register: (email: string, full_name: string, password: string) =>
-    request<{ access_token: string }>("/api/auth/register", {
+    request<{ message: string }>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({ email, full_name, password }),
     }),

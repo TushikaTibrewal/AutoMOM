@@ -12,6 +12,7 @@ from app.models import User
 from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
+    RegisterResponse,
     ResendRequest,
     TokenResponse,
     UserOut,
@@ -35,7 +36,7 @@ def _issue_verification(db: Session, user: User) -> None:
     send_verification_email(user.email, user.full_name, user.verification_token)
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(settings.rate_limit_auth)
 def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)):
     existing = db.scalar(select(User).where(User.email == payload.email.lower()))
@@ -52,9 +53,7 @@ def register(request: Request, payload: RegisterRequest, db: Session = Depends(g
     db.refresh(user)
     _issue_verification(db, user)
     record_audit(db, user.id, "auth.register", user.email)
-    # Issue a token so the user can start immediately; a banner prompts them to
-    # verify. Set REQUIRE_EMAIL_VERIFICATION=true to gate login instead.
-    return TokenResponse(access_token=create_access_token(user.id))
+    return RegisterResponse(message="Registration successful. Please check your email to verify your account.")
 
 
 @router.post("/login", response_model=TokenResponse)

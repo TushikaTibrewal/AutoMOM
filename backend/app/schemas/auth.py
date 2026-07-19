@@ -35,3 +35,8 @@ class VerifyRequest(BaseModel):
 
 class ResendRequest(BaseModel):
     email: EmailStr
+
+
+class RegisterResponse(BaseModel):
+    message: str
+

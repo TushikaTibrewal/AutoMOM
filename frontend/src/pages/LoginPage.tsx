@@ -33,10 +33,12 @@ export default function LoginPage() {
     try {
       if (mode === "login") {
         await login(values.email, values.password);
+        navigate("/");
       } else {
-        await registerUser(values.email, values.full_name, values.password);
+        const res = await registerUser(values.email, values.full_name, values.password);
+        toast("success", res.message);
+        setMode("login");
       }
-      navigate("/");
     } catch (err) {
       toast("error", err instanceof ApiError ? err.message : "Something went wrong");
     } finally {

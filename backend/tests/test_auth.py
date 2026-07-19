@@ -4,7 +4,8 @@ def test_register_and_login(client):
         json={"email": "a@b.com", "full_name": "A B", "password": "password123"},
     )
     assert res.status_code == 201
-    assert res.json()["access_token"]
+    assert "access_token" not in res.json()
+    assert "successful" in res.json()["message"]
 
     res = client.post("/api/auth/login", json={"email": "a@b.com", "password": "password123"})
     assert res.status_code == 200

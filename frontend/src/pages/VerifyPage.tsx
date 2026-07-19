@@ -55,10 +55,10 @@ export default function VerifyPage() {
                 <div>
                   <p className="text-lg font-semibold">Email verified</p>
                   <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    Your AutoMOM account is now confirmed.
+                    Your AutoMOM account is now confirmed. Please sign in to continue.
                   </p>
                 </div>
-                <Button onClick={() => navigate("/")}>Go to dashboard</Button>
+                <Button onClick={() => navigate("/login")}>Go to login</Button>
               </>
             )}
             {state === "error" && (
