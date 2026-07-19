@@ -96,9 +96,26 @@ def _send_smtp_email(to_email: str, subject: str, html_content: str) -> bool:
         server.quit()
         logger.info("Verification email sent via SMTP to %s", to_email)
         return True
-    except Exception as exc:
-        logger.error("SMTP send failed for %s: %s", to_email, exc)
+    except (OSError, smtplib.SMTPException) as exc:
+        logger.error(
+            "SMTP send failed for %s: %s. NOTE: many hosts (including Render) block "
+            "outbound SMTP ports 25/465/587 — use an HTTP email API (Brevo/Resend) instead.",
+            to_email,
+            exc,
+        )
         return False
+
+
+def active_provider() -> str:
+    """Which provider send_verification_email will actually use, in priority order."""
+    settings = get_settings()
+    if settings.brevo_api_key and settings.brevo_sender_email:
+        return "brevo"
+    if settings.smtp_host and settings.smtp_username and settings.smtp_password:
+        return "smtp"
+    if settings.resend_api_key:
+        return "resend"
+    return "none (links are only logged)"
 
 
 def send_verification_email(email: str, full_name: str, token: str) -> bool:

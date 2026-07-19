@@ -18,7 +18,7 @@ from app.schemas.auth import (
     UserOut,
     VerifyRequest,
 )
-from app.services.email_service import send_verification_email
+from app.services.email_service import active_provider, send_verification_email
 from app.utils.audit import record_audit
 from app.utils.security import create_access_token, get_current_user, hash_password, verify_password
 
@@ -101,3 +101,26 @@ def resend_verification(request: Request, payload: ResendRequest, db: Session = 
 @router.get("/me", response_model=UserOut)
 def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/email-status")
+def email_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Report the active email provider and attempt a real verification send to
+    the current user, returning whether the dispatch actually succeeded. Use this
+    to confirm email delivery is working end-to-end."""
+    token = secrets.token_urlsafe(32)
+    current_user.verification_token = token
+    current_user.token_expires = datetime.now(timezone.utc) + timedelta(
+        hours=settings.verification_token_ttl_hours
+    )
+    db.commit()
+    dispatched = send_verification_email(current_user.email, current_user.full_name, token)
+    return {
+        "provider": active_provider(),
+        "dispatched": dispatched,
+        "sent_to": current_user.email,
+        "hint": None if dispatched else "Check server logs for the provider error line.",
+    }
