@@ -118,54 +118,74 @@ def _send_smtp_email(to_email: str, subject: str, html_content: str) -> bool:
         return False
 
 
+def _has_brevo() -> bool:
+    s = get_settings()
+    return bool(s.brevo_api_key and s.brevo_sender_email)
+
+
+def _has_smtp() -> bool:
+    s = get_settings()
+    return bool(s.smtp_host and s.smtp_username and s.smtp_password)
+
+
+def _has_resend() -> bool:
+    return bool(get_settings().resend_api_key)
+
+
 def active_provider() -> str:
-    """Which provider send_verification_email will actually use, in priority order."""
-    settings = get_settings()
-    if settings.brevo_api_key and settings.brevo_sender_email:
+    """Which provider send_verification_email will actually use.
+
+    EMAIL_PROVIDER forces a specific one; "auto" picks the first configured.
+    """
+    forced = get_settings().email_provider.lower()
+    if forced in ("brevo", "smtp", "resend"):
+        return forced
+    if _has_brevo():
         return "brevo"
-    if settings.smtp_host and settings.smtp_username and settings.smtp_password:
+    if _has_smtp():
         return "smtp"
-    if settings.resend_api_key:
+    if _has_resend():
         return "resend"
     return "none (links are only logged)"
 
 
+def _send_resend_email(email: str, html_content: str) -> bool:
+    settings = get_settings()
+    try:
+        response = httpx.post(
+            RESEND_ENDPOINT,
+            headers={"Authorization": f"Bearer {settings.resend_api_key}"},
+            json={
+                "from": settings.resend_from,
+                "to": [email],
+                "subject": "Verify your AutoMOM account",
+                "html": html_content,
+            },
+            timeout=15,
+        )
+        if response.status_code >= 400:
+            logger.error("Resend send failed (%s): %s", response.status_code, response.text[:300])
+            return _record(False, f"Resend {response.status_code}: {response.text[:200]}")
+        logger.info("Verification email sent to %s via Resend", email)
+        return _record(True, None)
+    except httpx.HTTPError as exc:
+        logger.error("Resend request error for %s: %s", email, exc)
+        return _record(False, f"Resend request error: {exc}")
+
+
 def send_verification_email(email: str, full_name: str, token: str) -> bool:
-    """Returns True if an email was actually dispatched via Brevo, SMTP or Resend."""
+    """Returns True if an email was actually dispatched. Honors EMAIL_PROVIDER."""
     settings = get_settings()
     link = f"{settings.frontend_url.rstrip('/')}/verify?token={token}"
     html_content = _verification_html(full_name, link)
+    provider = active_provider()
 
-    # 1. Prefer Brevo API if configured (HTTP based, works on Render free tier without custom domain)
-    if settings.brevo_api_key and settings.brevo_sender_email:
+    if provider == "brevo" and _has_brevo():
         return _send_brevo_email(email, full_name, "Verify your AutoMOM account", html_content)
-
-    # 2. Fall back to SMTP if configured
-    if settings.smtp_host and settings.smtp_username and settings.smtp_password:
+    if provider == "smtp" and _has_smtp():
         return _send_smtp_email(email, "Verify your AutoMOM account", html_content)
-
-    # 3. Fall back to Resend API
-    if settings.resend_api_key:
-        try:
-            response = httpx.post(
-                RESEND_ENDPOINT,
-                headers={"Authorization": f"Bearer {settings.resend_api_key}"},
-                json={
-                    "from": settings.resend_from,
-                    "to": [email],
-                    "subject": "Verify your AutoMOM account",
-                    "html": html_content,
-                },
-                timeout=15,
-            )
-            if response.status_code >= 400:
-                logger.error("Resend send failed (%s): %s", response.status_code, response.text[:300])
-                return False
-            logger.info("Verification email sent to %s via Resend", email)
-            return True
-        except httpx.HTTPError as exc:
-            logger.error("Resend request error for %s: %s", email, exc)
-            return False
+    if provider == "resend" and _has_resend():
+        return _send_resend_email(email, html_content)
 
     # 4. Fallback: log for local dev
     logger.warning("No email provider configured — verification link for %s: %s", email, link)

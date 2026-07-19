@@ -54,7 +54,8 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
-    # Email (Resend). If no key is set, verification links are logged instead of sent.
+    # Email. email_provider: auto | brevo | smtp | resend (auto = first configured).
+    email_provider: str = "auto"
     resend_api_key: str = ""
     resend_from: str = "AutoMOM <onboarding@resend.dev>"
     frontend_url: str = "http://localhost:5173"
