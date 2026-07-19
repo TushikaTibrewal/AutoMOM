@@ -50,13 +50,21 @@ class Extractor:
         provider = self._resolve_provider()
         messages = build_messages(meeting_meta, attendees, clean)
 
-        if provider == "openai":
-            mom = self._extract_openai(messages)
-        elif provider == "gemini":
-            mom = self._extract_gemini(messages)
-        else:
-            mom = self._extract_mock(clean)
-        return mom, provider, CURRENT_PROMPT_VERSION
+        if provider == "mock":
+            return self._extract_mock(clean), "mock", CURRENT_PROMPT_VERSION
+
+        # Real provider. If it errors (quota, timeout on a large draft, bad
+        # model name, validation exhausted), degrade to the deterministic mock
+        # extractor so generation never hard-fails — the user still gets minutes.
+        try:
+            if provider == "openai":
+                mom = self._extract_openai(messages)
+            else:
+                mom = self._extract_gemini(messages)
+            return mom, provider, CURRENT_PROMPT_VERSION
+        except Exception as exc:  # noqa: BLE001 - deliberately broad, we fall back
+            logger.warning("%s extraction failed (%s); falling back to mock", provider, exc)
+            return self._extract_mock(clean), f"mock (fallback from {provider})", CURRENT_PROMPT_VERSION
 
     # --------------------------------------------------------------- providers
     def _resolve_provider(self) -> str:
