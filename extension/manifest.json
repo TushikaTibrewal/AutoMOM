@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "AutoMOM — Live Minutes of Meeting",
+  "version": "1.0.0",
+  "description": "Capture Google Meet, Zoom and Teams calls and generate live, editable Minutes of Meeting.",
+  "minimum_chrome_version": "116",
+  "permissions": ["tabCapture", "offscreen", "sidePanel", "storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://automom-backend.onrender.com/*",
+    "http://localhost:8000/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "AutoMOM"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
+  },
+  "content_scripts": [
+    {
+      "js": ["content.js"],
+      "matches": [
+        "https://meet.google.com/*",
+        "https://*.zoom.us/*",
+        "https://teams.microsoft.com/*",
+        "https://teams.live.com/*"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/offscreen.html",
+        "assets/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

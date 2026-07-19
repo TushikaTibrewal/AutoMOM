@@ -6,7 +6,7 @@
   "description": "AutoMOM — live Minutes of Meeting for Google Meet, Zoom and Microsoft Teams.",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node node_modules/typescript/bin/tsc -b && vite build && node copy-manifest.js",
     "zip": "cd dist && bestzip ../automom-extension.zip *"
   },
   "dependencies": {
