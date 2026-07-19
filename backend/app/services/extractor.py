@@ -166,6 +166,8 @@ class Extractor:
         try:
             if provider == "openai":
                 mom = self._extract_openai(messages)
+            elif provider == "groq":
+                mom = self._extract_groq(messages)
             else:
                 mom = self._extract_gemini(messages)
             return mom, provider, CURRENT_PROMPT_VERSION
@@ -176,14 +178,37 @@ class Extractor:
     # --------------------------------------------------------------- providers
     def _resolve_provider(self) -> str:
         cfg = self.settings
-        if cfg.ai_provider in ("openai", "gemini", "mock"):
+        if cfg.ai_provider in ("openai", "gemini", "groq", "mock"):
             return cfg.ai_provider
         if cfg.openai_api_key:
             return "openai"
+        if cfg.groq_api_key:
+            return "groq"
         if cfg.gemini_api_key:
             return "gemini"
         logger.warning("No AI API key configured — using deterministic mock extractor")
         return "mock"
+
+    def _extract_groq(self, messages: list[dict]) -> MomExtraction:
+        """Groq via its OpenAI-compatible endpoint + Instructor (JSON mode)."""
+        import instructor
+        from openai import OpenAI
+
+        client = instructor.from_openai(
+            OpenAI(
+                api_key=self.settings.groq_api_key,
+                base_url="https://api.groq.com/openai/v1",
+                timeout=self.settings.ai_timeout_seconds,
+            ),
+            mode=instructor.Mode.JSON,
+        )
+        return client.chat.completions.create(
+            model=self.settings.groq_model,
+            messages=messages,
+            response_model=MomExtraction,
+            max_retries=self.settings.ai_max_retries,
+            temperature=0.2,
+        )
 
     def _extract_openai(self, messages: list[dict]) -> MomExtraction:
         import instructor

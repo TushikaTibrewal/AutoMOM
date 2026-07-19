@@ -23,11 +23,14 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24
 
     # AI providers
-    ai_provider: str = "auto"  # auto | openai | gemini | mock
+    ai_provider: str = "auto"  # auto | openai | gemini | groq | mock
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
+    # Groq: OpenAI-compatible, fast, generous free tier
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
     ai_max_retries: int = 3
     ai_timeout_seconds: int = 60
 
