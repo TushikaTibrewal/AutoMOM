@@ -7,6 +7,7 @@ import {
   LogOut,
   Moon,
   Plus,
+  Radio,
   Sun,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/button";
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/new", label: "New Meeting", icon: Plus, end: false },
+  { to: "/live", label: "Live Meeting", icon: Radio, end: false },
   { to: "/templates", label: "Templates", icon: LayoutTemplate, end: false },
   { to: "/exports", label: "Exports", icon: FileDown, end: false },
 ];

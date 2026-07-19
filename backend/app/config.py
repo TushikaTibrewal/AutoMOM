@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     max_transcript_chars: int = 200_000
     max_upload_bytes: int = 5 * 1024 * 1024
     rate_limit_generate: str = "10/minute"
+    rate_limit_extract: str = "60/minute"  # live mode polls this frequently
     rate_limit_auth: str = "20/minute"
     rate_limit_default: str = "120/minute"
 

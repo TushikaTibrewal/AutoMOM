@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const NewMeetingPage = lazy(() => import("@/pages/NewMeetingPage"));
+const LiveMeetingPage = lazy(() => import("@/pages/LiveMeetingPage"));
 const EditorPage = lazy(() => import("@/pages/EditorPage"));
 const TemplatesPage = lazy(() => import("@/pages/TemplatesPage"));
 const ExportsPage = lazy(() => import("@/pages/ExportsPage"));
@@ -56,6 +57,14 @@ export default function App() {
               element={
                 <PageTransition>
                   <NewMeetingPage />
+                </PageTransition>
+              }
+            />
+            <Route
+              path="/live"
+              element={
+                <PageTransition>
+                  <LiveMeetingPage />
                 </PageTransition>
               }
             />

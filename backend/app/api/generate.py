@@ -96,3 +96,31 @@ def preview(
     except TemplateEngineError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"html_preview": html}
+
+
+@router.post("/extract")
+@limiter.limit(settings.rate_limit_extract)
+def extract_live(
+    request: Request,
+    payload: GenerateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Stateless extraction for live mode: transcript -> MoM JSON + HTML.
+
+    Does NOT persist — the live page polls this repeatedly as the transcript
+    grows, then saves once via /generate when the meeting ends.
+    """
+    if not payload.transcript.strip():
+        return {"mom": None, "html_preview": "", "provider": "none"}
+    if len(payload.transcript) > settings.max_transcript_chars:
+        raise HTTPException(status_code=413, detail="Transcript too long")
+    mom, provider, _ = extractor.extract(
+        meeting_meta=payload.meeting.model_dump(),
+        attendees=[a.model_dump() for a in payload.attendees],
+        transcript=payload.transcript,
+    )
+    try:
+        html = render_html(payload.meeting, payload.attendees, mom, payload.template_slug)
+    except TemplateEngineError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"mom": mom.model_dump(), "html_preview": html, "provider": provider}

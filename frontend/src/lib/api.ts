@@ -131,6 +131,17 @@ export const api = {
   preview: (payload: { meeting: MeetingInfo; attendees: Attendee[]; mom: Mom; template_slug: string }) =>
     request<{ html_preview: string }>("/api/preview", { method: "POST", body: JSON.stringify(payload) }),
 
+  extract: (payload: {
+    meeting: MeetingInfo;
+    attendees: Attendee[];
+    transcript: string;
+    template_slug: string;
+  }) =>
+    request<{ mom: Mom | null; html_preview: string; provider: string }>("/api/extract", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   listMeetings: (q?: string) =>
     request<MeetingListItem[]>(`/api/meetings${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   getMeeting: (id: number) => request<MeetingOut>(`/api/meetings/${id}`),

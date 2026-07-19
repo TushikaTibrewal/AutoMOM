@@ -42,7 +42,7 @@ export default function DashboardPage() {
     <div className="mx-auto max-w-5xl px-6 py-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Meetings</h1>
+          <h1 className="text-2xl font-bold">Minutes of Meeting</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Your meeting history and drafts
           </p>

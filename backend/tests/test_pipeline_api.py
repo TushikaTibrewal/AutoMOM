@@ -129,3 +129,20 @@ def test_template_preview_renders_sample(client):
 
 def test_template_preview_unknown_404(client):
     assert client.get("/api/templates/does-not-exist/preview").status_code == 404
+
+
+def test_extract_live_no_persist(client, auth_headers, sample_payload):
+    res = client.post("/api/extract", json=sample_payload, headers=auth_headers)
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["mom"]["agenda"]
+    assert "<html" in body["html_preview"].lower()
+    # extract must NOT create a meeting
+    assert client.get("/api/meetings", headers=auth_headers).json() == []
+
+
+def test_extract_live_blank_transcript_returns_empty(client, auth_headers, sample_payload):
+    sample_payload["transcript"] = "   "
+    res = client.post("/api/extract", json=sample_payload, headers=auth_headers)
+    assert res.status_code == 200
+    assert res.json()["mom"] is None
