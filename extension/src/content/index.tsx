@@ -35,16 +35,36 @@ function scrapeRoster(platform: Platform): string[] {
   const names = new Set<string>();
   try {
     if (platform === "meet") {
-      // Google Meet speaker labels/grid cards
+      // 1. Google Meet speaker labels/grid cards attributes
       const elements = document.querySelectorAll("[data-self-name], [data-name]");
       elements.forEach((el) => {
         const nameAttr = el.getAttribute("data-self-name") || el.getAttribute("data-name");
         if (nameAttr) names.add(nameAttr.trim());
       });
-      // Also look for names in the sidebar list if open
-      const sideNames = document.querySelectorAll(".zW293b, .ZjS7id");
-      sideNames.forEach((el) => {
-        if (el.textContent) names.add(el.textContent.trim());
+
+      // 2. Active grid cards and participant roster panel list classes (current obfuscated labels)
+      const dynamicClasses = [".zW293b", ".ZjS7id", ".jVwmLb", ".yg51Mc", ".Jb02rc", ".cM3h5e"];
+      dynamicClasses.forEach((cls) => {
+        document.querySelectorAll(cls).forEach((el) => {
+          if (el.textContent) {
+            const text = el.textContent.trim();
+            if (text && text.length > 2 && text.length < 50) {
+              names.add(text);
+            }
+          }
+        });
+      });
+
+      // 3. Grid tile elements (checking elements carrying participant metadata)
+      document.querySelectorAll("[data-participant-id]").forEach((el) => {
+        const text = el.textContent?.trim();
+        if (text) {
+          // Extract first line or clean text (participant panels append status icons sometimes)
+          const cleanText = text.split("\n")[0].replace(/[🎙️🔇📌]/g, "").trim();
+          if (cleanText && cleanText.length > 2 && cleanText.length < 50) {
+            names.add(cleanText);
+          }
+        }
       });
     } else if (platform === "zoom") {
       // Zoom web client participant names
@@ -373,6 +393,15 @@ function init() {
 
   const host = document.createElement("div");
   host.id = "automom-widget-host";
+  
+  // Style the host to prevent layout collapse, clipping, or blocking mouse events
+  host.style.position = "fixed";
+  host.style.zIndex = "999999";
+  host.style.top = "0";
+  host.style.left = "0";
+  host.style.width = "0";
+  host.style.height = "0";
+  host.style.overflow = "visible";
   
   // Isolate styles by appending styled DOM to Shadow Root
   const shadowRoot = host.attachShadow({ mode: "open" });

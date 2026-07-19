@@ -166,14 +166,10 @@ function getMediaStreamIdPromise(tabId: number): Promise<string> {
   });
 }
 
-async function setupOffscreen(tabId: number) {
-  // Check if offscreen exists
-  const contexts = await (chrome.runtime as any).getContexts({
-    contextTypes: ["OFFSCREEN_DOCUMENT"],
-  });
+let isOffscreenOpen = false;
 
-  if (contexts.length > 0) {
-    // Offscreen already open, send message
+async function setupOffscreen(tabId: number) {
+  if (isOffscreenOpen) {
     try {
       const streamId = await getMediaStreamIdPromise(tabId);
       chrome.runtime.sendMessage({ type: "start-capture", streamId }).catch(() => {});
@@ -191,6 +187,7 @@ async function setupOffscreen(tabId: number) {
       reasons: ["USER_MEDIA" as any, "DISPLAY_MEDIA" as any],
       justification: "Capture tab and mic audio for real-time translation and transcription",
     });
+    isOffscreenOpen = true;
     // Let offscreen load, then send start message
     setTimeout(() => {
       chrome.runtime.sendMessage({ type: "start-capture", streamId }).catch(() => {});
@@ -201,11 +198,9 @@ async function setupOffscreen(tabId: number) {
 }
 
 async function closeOffscreen() {
-  const contexts = await (chrome.runtime as any).getContexts({
-    contextTypes: ["OFFSCREEN_DOCUMENT"],
-  });
-  if (contexts.length > 0) {
+  if (isOffscreenOpen) {
     chrome.offscreen.closeDocument().catch(() => {});
+    isOffscreenOpen = false;
   }
 }
 
