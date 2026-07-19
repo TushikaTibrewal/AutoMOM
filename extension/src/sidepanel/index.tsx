@@ -49,6 +49,20 @@ const App: React.FC = () => {
     });
   }, []);
 
+  // Request microphone permission on mount so the extension gains media access (inherited by offscreen)
+  useEffect(() => {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then((stream) => {
+          stream.getTracks().forEach((track) => track.stop());
+          console.log("AutoMOM Extension: microphone permission obtained.");
+        })
+        .catch((err) => {
+          console.warn("AutoMOM Extension: mic permission denied/cancelled", err);
+        });
+    }
+  }, []);
+
   // Connect to Background
   useEffect(() => {
     portRef.current = chrome.runtime.connect({ name: "automom-sidepanel" });

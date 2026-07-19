@@ -67,10 +67,23 @@ function scrapeRoster(platform: Platform): string[] {
         }
       });
     } else if (platform === "zoom") {
-      // Zoom web client participant names
-      const participantItems = document.querySelectorAll(".participants-item__name, .speaker-name");
-      participantItems.forEach((el) => {
-        if (el.textContent) names.add(el.textContent.trim());
+      // Zoom web client participant names with generic fallback for React dynamic classes
+      const selectors = [
+        ".participants-item__name",
+        ".speaker-name",
+        ".participants-item__name-text",
+        "[class*='name-label']",
+        "[class*='participant-name']",
+      ];
+      selectors.forEach((sel) => {
+        document.querySelectorAll(sel).forEach((el) => {
+          if (el.textContent) {
+            const text = el.textContent.trim();
+            if (text && text.length > 2 && text.length < 50 && !text.includes(":") && !text.includes("{")) {
+              names.add(text);
+            }
+          }
+        });
       });
     } else if (platform === "teams") {
       // Teams participant list items
