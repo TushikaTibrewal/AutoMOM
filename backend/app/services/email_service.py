@@ -17,6 +17,18 @@ logger = get_logger("email")
 RESEND_ENDPOINT = "https://api.resend.com/emails"
 BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email"
 
+# Last send outcome, exposed via /api/auth/email-debug for troubleshooting.
+# Holds only a provider status/message snippet — never secrets.
+LAST_EMAIL_ERROR: str | None = None
+LAST_EMAIL_OK: bool | None = None
+
+
+def _record(ok: bool, error: str | None) -> bool:
+    global LAST_EMAIL_ERROR, LAST_EMAIL_OK
+    LAST_EMAIL_OK = ok
+    LAST_EMAIL_ERROR = error
+    return ok
+
 
 def _verification_html(full_name: str, link: str) -> str:
     return f"""\
@@ -64,12 +76,12 @@ def _send_brevo_email(to_email: str, to_name: str, subject: str, html_content: s
         )
         if response.status_code >= 400:
             logger.error("Brevo send failed (%s): %s", response.status_code, response.text[:300])
-            return False
+            return _record(False, f"Brevo {response.status_code}: {response.text[:200]}")
         logger.info("Verification email sent via Brevo to %s", to_email)
-        return True
+        return _record(True, None)
     except httpx.HTTPError as exc:
         logger.error("Brevo request error for %s: %s", to_email, exc)
-        return False
+        return _record(False, f"Brevo request error: {exc}")
 
 
 def _send_smtp_email(to_email: str, subject: str, html_content: str) -> bool:

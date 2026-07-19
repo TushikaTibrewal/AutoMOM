@@ -18,6 +18,7 @@ from app.schemas.auth import (
     UserOut,
     VerifyRequest,
 )
+from app.services import email_service
 from app.services.email_service import active_provider, send_verification_email
 from app.utils.audit import record_audit
 from app.utils.security import create_access_token, get_current_user, hash_password, verify_password
@@ -96,6 +97,23 @@ def resend_verification(request: Request, payload: ResendRequest, db: Session = 
     if user and not user.is_verified:
         _issue_verification(db, user)
     return {"message": "If that account exists and is unverified, a new link has been sent."}
+
+
+@router.post("/email-debug")
+@limiter.limit(settings.rate_limit_auth)
+def email_debug(request: Request, payload: ResendRequest, db: Session = Depends(get_db)):
+    """Troubleshooting: attempt a verification send to the given email and report
+    the provider outcome (status/message only, no secrets). Remove once email works."""
+    user = db.scalar(select(User).where(User.email == payload.email.lower()))
+    target = user.email if user else payload.email.lower()
+    name = user.full_name if user else "Test"
+    dispatched = send_verification_email(target, name, secrets.token_urlsafe(16))
+    return {
+        "provider": active_provider(),
+        "dispatched": dispatched,
+        "last_error": email_service.LAST_EMAIL_ERROR,
+        "sent_to": target,
+    }
 
 
 @router.get("/me", response_model=UserOut)
