@@ -201,20 +201,59 @@ class Extractor:
             max_retries=self.settings.ai_max_retries,
         )
 
+    def _gemini_model_candidates(self) -> list[str]:
+        """Configured model first, then broadly-available fallbacks.
+
+        Google periodically retires model ids or restricts them to newer SDKs;
+        trying a list makes extraction resilient to a single bad/deprecated id.
+        """
+        configured = self.settings.gemini_model.strip()
+        fallbacks = [
+            "gemini-2.0-flash",
+            "gemini-flash-latest",
+            "gemini-2.0-flash-001",
+            "gemini-pro-latest",
+        ]
+        ordered = [configured] + [m for m in fallbacks if m != configured]
+        return ordered
+
     def _extract_gemini(self, messages: list[dict]) -> MomExtraction:
         import google.generativeai as genai
 
         genai.configure(api_key=self.settings.gemini_api_key)
-        model = genai.GenerativeModel(
-            self.settings.gemini_model,
-            system_instruction=messages[0]["content"],
-            generation_config={"response_mime_type": "application/json"},
+
+        model_not_found_error: Exception | None = None
+        for model_name in self._gemini_model_candidates():
+            try:
+                model = genai.GenerativeModel(
+                    model_name,
+                    system_instruction=messages[0]["content"],
+                    generation_config={"response_mime_type": "application/json"},
+                )
+                mom = self._gemini_generate_validated(model, messages)
+                if model_name != self.settings.gemini_model.strip():
+                    logger.info("Gemini used fallback model '%s'", model_name)
+                return mom
+            except Exception as exc:  # noqa: BLE001
+                text = str(exc).lower()
+                if "404" in text or "not found" in text or "not available" in text:
+                    # Bad/retired model id — try the next candidate.
+                    model_not_found_error = exc
+                    logger.warning("Gemini model '%s' unavailable: %s", model_name, exc)
+                    continue
+                # Quota (429) or any other error: don't churn other models
+                # (they share the same quota) — bubble up to the mock fallback.
+                raise
+        raise ExtractionError(
+            f"No usable Gemini model found. Last error: {model_not_found_error}"
         )
+
+    def _gemini_generate_validated(self, model, messages: list[dict]) -> MomExtraction:
         last_error: Exception | None = None
         prompt = messages[1]["content"]
         for attempt in range(self.settings.ai_max_retries):
+            response = model.generate_content(prompt)
             try:
-                response = model.generate_content(prompt)
                 return self._validate_json_text(response.text)
             except (ValidationError, json.JSONDecodeError, ValueError) as exc:
                 last_error = exc

@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1"
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-pro"
+    gemini_model: str = "gemini-2.0-flash"
     ai_max_retries: int = 3
     ai_timeout_seconds: int = 60
 
