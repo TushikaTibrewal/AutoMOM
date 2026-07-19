@@ -40,3 +40,36 @@ def test_me(client, auth_headers):
     res = client.get("/api/auth/me", headers=auth_headers)
     assert res.status_code == 200
     assert res.json()["email"] == "test@example.com"
+
+
+def test_new_user_starts_unverified(client, auth_headers):
+    assert client.get("/api/auth/me", headers=auth_headers).json()["is_verified"] is False
+
+
+def test_email_verification_flow(client, db_session=None):
+    from app.database import SessionLocal
+    from app.models import User
+
+    client.post(
+        "/api/auth/register",
+        json={"email": "v@example.com", "full_name": "V", "password": "password123"},
+    )
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.email == "v@example.com").one()
+        token = user.verification_token
+        assert token  # token generated on register
+
+    res = client.post("/api/auth/verify", json={"token": token})
+    assert res.status_code == 200
+    assert res.json()["is_verified"] is True
+
+    # token is single-use
+    assert client.post("/api/auth/verify", json={"token": token}).status_code == 400
+
+
+def test_verify_bad_token(client):
+    assert client.post("/api/auth/verify", json={"token": "nope"}).status_code == 400
+
+
+def test_resend_verification_always_202(client):
+    assert client.post("/api/auth/resend-verification", json={"email": "nobody@x.com"}).status_code == 202

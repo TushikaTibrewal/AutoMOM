@@ -103,5 +103,6 @@ export interface UserOut {
   id: number;
   email: string;
   full_name: string;
+  is_verified: boolean;
   created_at: string;
 }

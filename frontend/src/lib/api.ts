@@ -119,6 +119,13 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => request<UserOut>("/api/auth/me"),
+  verifyEmail: (token: string) =>
+    request<UserOut>("/api/auth/verify", { method: "POST", body: JSON.stringify({ token }) }),
+  resendVerification: (email: string) =>
+    request<{ message: string }>("/api/auth/resend-verification", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
 
   generate: (payload: {
     meeting: MeetingInfo;

@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
+const VerifyPage = lazy(() => import("@/pages/VerifyPage"));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const NewMeetingPage = lazy(() => import("@/pages/NewMeetingPage"));
 const LiveMeetingPage = lazy(() => import("@/pages/LiveMeetingPage"));
@@ -37,6 +38,7 @@ export default function App() {
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/verify" element={<VerifyPage />} />
           <Route
             element={
               <Protected>

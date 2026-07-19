@@ -52,6 +52,13 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
+    # Email (Resend). If no key is set, verification links are logged instead of sent.
+    resend_api_key: str = ""
+    resend_from: str = "AutoMOM <onboarding@resend.dev>"
+    frontend_url: str = "http://localhost:5173"
+    require_email_verification: bool = False  # if True, unverified users cannot log in
+    verification_token_ttl_hours: int = 48
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

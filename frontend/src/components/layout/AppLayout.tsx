@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import { Button } from "@/components/ui/button";
+import { VerifyBanner } from "@/components/VerifyBanner";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -120,6 +121,7 @@ export function AppLayout() {
       </div>
 
       <main className="flex-1 md:ml-60 max-md:pt-14">
+        <VerifyBanner />
         <Outlet />
       </main>
     </div>

@@ -37,3 +37,32 @@ def init_db() -> None:
     from app import models  # noqa: F401  (register mappers)
 
     Base.metadata.create_all(bind=engine)
+    _apply_lightweight_migrations()
+
+
+# Columns added after the first release. create_all() only creates missing
+# tables, not new columns on existing ones, so we add them idempotently here.
+# (A full app would use Alembic; this keeps the single-file deploy self-healing.)
+_ADDITIVE_COLUMNS = {
+    "users": [
+        ("is_verified", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("verification_token", "VARCHAR(255)"),
+        ("token_expires", "TIMESTAMPTZ"),
+    ],
+}
+
+
+def _apply_lightweight_migrations() -> None:
+    from sqlalchemy import inspect, text
+
+    if engine.dialect.name != "postgresql":
+        return  # SQLite dev/test DBs are always created fresh with all columns
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        for table, columns in _ADDITIVE_COLUMNS.items():
+            if not inspector.has_table(table):
+                continue
+            existing = {c["name"] for c in inspector.get_columns(table)}
+            for name, ddl in columns:
+                if name not in existing:
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {name} {ddl}'))

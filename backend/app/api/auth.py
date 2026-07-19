@@ -1,3 +1,6 @@
+import secrets
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -6,12 +9,30 @@ from app.api.limiter import limiter
 from app.config import get_settings
 from app.database import get_db
 from app.models import User
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserOut
+from app.schemas.auth import (
+    LoginRequest,
+    RegisterRequest,
+    ResendRequest,
+    TokenResponse,
+    UserOut,
+    VerifyRequest,
+)
+from app.services.email_service import send_verification_email
 from app.utils.audit import record_audit
 from app.utils.security import create_access_token, get_current_user, hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 settings = get_settings()
+
+
+def _issue_verification(db: Session, user: User) -> None:
+    """Generate a fresh token, persist it, and dispatch the verification email."""
+    user.verification_token = secrets.token_urlsafe(32)
+    user.token_expires = datetime.now(timezone.utc) + timedelta(
+        hours=settings.verification_token_ttl_hours
+    )
+    db.commit()
+    send_verification_email(user.email, user.full_name, user.verification_token)
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -24,11 +45,15 @@ def register(request: Request, payload: RegisterRequest, db: Session = Depends(g
         email=payload.email.lower(),
         full_name=payload.full_name.strip(),
         hashed_password=hash_password(payload.password),
+        is_verified=False,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
+    _issue_verification(db, user)
     record_audit(db, user.id, "auth.register", user.email)
+    # Issue a token so the user can start immediately; a banner prompts them to
+    # verify. Set REQUIRE_EMAIL_VERIFICATION=true to gate login instead.
     return TokenResponse(access_token=create_access_token(user.id))
 
 
@@ -38,8 +63,40 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     user = db.scalar(select(User).where(User.email == payload.email.lower()))
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    if settings.require_email_verification and not user.is_verified:
+        raise HTTPException(status_code=403, detail="Please verify your email before signing in")
     record_audit(db, user.id, "auth.login", user.email)
     return TokenResponse(access_token=create_access_token(user.id))
+
+
+@router.post("/verify", response_model=UserOut)
+def verify_email(payload: VerifyRequest, db: Session = Depends(get_db)):
+    user = db.scalar(select(User).where(User.verification_token == payload.token))
+    if user is None:
+        raise HTTPException(status_code=400, detail="Invalid or already-used verification link")
+    expires = user.token_expires
+    if expires is not None:
+        if expires.tzinfo is None:  # SQLite returns naive datetimes; assume UTC
+            expires = expires.replace(tzinfo=timezone.utc)
+        if expires < datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="Verification link has expired. Request a new one.")
+    user.is_verified = True
+    user.verification_token = None
+    user.token_expires = None
+    db.commit()
+    db.refresh(user)
+    record_audit(db, user.id, "auth.verify", user.email)
+    return user
+
+
+@router.post("/resend-verification", status_code=202)
+@limiter.limit(settings.rate_limit_auth)
+def resend_verification(request: Request, payload: ResendRequest, db: Session = Depends(get_db)):
+    user = db.scalar(select(User).where(User.email == payload.email.lower()))
+    # Always return 202 — do not reveal whether an email is registered.
+    if user and not user.is_verified:
+        _issue_verification(db, user)
+    return {"message": "If that account exists and is unverified, a new link has been sent."}
 
 
 @router.get("/me", response_model=UserOut)

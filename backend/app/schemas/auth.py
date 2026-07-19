@@ -25,4 +25,13 @@ class UserOut(BaseModel):
     id: int
     email: str
     full_name: str
+    is_verified: bool
     created_at: datetime
+
+
+class VerifyRequest(BaseModel):
+    token: str
+
+
+class ResendRequest(BaseModel):
+    email: EmailStr
