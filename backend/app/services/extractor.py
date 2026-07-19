@@ -152,42 +152,62 @@ class Extractor:
     def extract(
         self, meeting_meta: dict, attendees: list[dict], transcript: str
     ) -> tuple[MomExtraction, str, str]:
-        """Returns (validated extraction, provider used, prompt version)."""
+        """Returns (validated extraction, provider used, prompt version).
+
+        Tries each configured provider in order (fail-over across providers on
+        quota/error), and finally the deterministic mock so generation never
+        hard-fails.
+        """
         clean = preprocess_transcript(transcript, self.settings.max_transcript_chars)
-        provider = self._resolve_provider()
         messages = build_messages(meeting_meta, attendees, clean)
 
-        if provider == "mock":
-            return self._extract_mock(clean), "mock", CURRENT_PROMPT_VERSION
+        chain = self._provider_chain()
+        handlers = {
+            "openai": self._extract_openai,
+            "groq": self._extract_groq,
+            "gemini": self._extract_gemini,
+        }
+        failed: list[str] = []
+        for provider in chain:
+            try:
+                mom = handlers[provider](messages)
+                label = provider if not failed else f"{provider} (after {', '.join(failed)} failed)"
+                return mom, label, CURRENT_PROMPT_VERSION
+            except Exception as exc:  # noqa: BLE001 - fail over to the next provider
+                logger.warning("%s extraction failed (%s)", provider, exc)
+                failed.append(provider)
 
-        # Real provider. If it errors (quota, timeout on a large draft, bad
-        # model name, validation exhausted), degrade to the deterministic mock
-        # extractor so generation never hard-fails — the user still gets minutes.
-        try:
-            if provider == "openai":
-                mom = self._extract_openai(messages)
-            elif provider == "groq":
-                mom = self._extract_groq(messages)
-            else:
-                mom = self._extract_gemini(messages)
-            return mom, provider, CURRENT_PROMPT_VERSION
-        except Exception as exc:  # noqa: BLE001 - deliberately broad, we fall back
-            logger.warning("%s extraction failed (%s); falling back to mock", provider, exc)
-            return self._extract_mock(clean), f"mock (fallback from {provider})", CURRENT_PROMPT_VERSION
+        label = "mock" if not failed else f"mock (fallback from {', '.join(failed)})"
+        return self._extract_mock(clean), label, CURRENT_PROMPT_VERSION
 
     # --------------------------------------------------------------- providers
-    def _resolve_provider(self) -> str:
+    def _provider_chain(self) -> list[str]:
+        """Ordered list of real providers to attempt.
+
+        - Explicit AI_PROVIDER goes first, then any other provider that has a
+          key configured acts as automatic backup.
+        - "auto"/"mock"/unknown falls through to key-presence ordering.
+        """
         cfg = self.settings
-        if cfg.ai_provider in ("openai", "gemini", "groq", "mock"):
-            return cfg.ai_provider
-        if cfg.openai_api_key:
-            return "openai"
-        if cfg.groq_api_key:
-            return "groq"
-        if cfg.gemini_api_key:
-            return "gemini"
-        logger.warning("No AI API key configured — using deterministic mock extractor")
-        return "mock"
+        available = [
+            name
+            for name, key in (
+                ("openai", cfg.openai_api_key),
+                ("groq", cfg.groq_api_key),
+                ("gemini", cfg.gemini_api_key),
+            )
+            if key
+        ]
+        if cfg.ai_provider == "mock":
+            return []
+        if cfg.ai_provider in ("openai", "groq", "gemini"):
+            # Requested provider first; the rest (with keys) as fail-over backups.
+            ordered = [cfg.ai_provider] + [p for p in available if p != cfg.ai_provider]
+            # Include the requested provider even if its key check is done elsewhere.
+            return list(dict.fromkeys(ordered))
+        if not available:
+            logger.warning("No AI API key configured — using deterministic mock extractor")
+        return available
 
     def _extract_groq(self, messages: list[dict]) -> MomExtraction:
         """Groq via its OpenAI-compatible endpoint + Instructor (JSON mode)."""
