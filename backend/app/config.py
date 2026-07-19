@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # Groq: OpenAI-compatible, fast, generous free tier
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
+    groq_whisper_model: str = "whisper-large-v3-turbo"  # live audio transcription
     ai_max_retries: int = 3
     ai_timeout_seconds: int = 60
 

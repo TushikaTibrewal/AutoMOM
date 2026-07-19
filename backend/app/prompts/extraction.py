@@ -66,6 +66,10 @@ PROMPTS: dict[str, str] = {
         "   Convert text speak, slang, and shorthand into their formal business equivalent (e.g.,\n"
         "   'Ravi will prepare and finalize the cost sheets by Friday'). Preserve the exact meaning\n"
         "   and every fact — do NOT add, infer, or embellish information, only clean up the language.\n"
+        "10. In 'participants', list the proper names of people who clearly took part in the meeting\n"
+        "    (they spoke, were addressed by name, or were named as present). Names only,\n"
+        "    de-duplicated. Do NOT invent names or include people mentioned only as absent or as\n"
+        "    third parties. Empty list if no names are identifiable.\n"
     ),
 }
 

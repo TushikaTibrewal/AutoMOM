@@ -61,7 +61,16 @@ class MomExtraction(BaseModel):
     discussion_points: list[DiscussionPoint] = Field(default_factory=list)
     decisions: list[Decision] = Field(default_factory=list)
     action_items: list[ActionItem] = Field(default_factory=list)
+    participants: list[str] = Field(
+        default_factory=list,
+        description="Names of people identified as present/speaking. Empty if none stated.",
+    )
     summary: str | None = Field(None, description="1-3 sentence neutral summary, null if unclear")
+
+    @field_validator("participants", mode="before")
+    @classmethod
+    def strip_participants(cls, v):
+        return _strip(v)
     confidence: float | None = Field(
         None, ge=0.0, le=1.0, description="Extraction confidence 0..1, null if not assessable"
     )

@@ -5,10 +5,11 @@ this endpoint handles the "upload transcript" path (.txt/.md/.vtt/.srt).
 """
 import re
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.config import get_settings
 from app.models import User
+from app.services.transcribe_service import TranscriptionUnavailableError, transcribe_audio
 from app.utils.sanitize import sanitize_text
 from app.utils.security import get_current_user
 
@@ -16,6 +17,7 @@ router = APIRouter(prefix="/api", tags=["transcribe"])
 settings = get_settings()
 
 ALLOWED_EXTENSIONS = {".txt", ".md", ".vtt", ".srt", ".text"}
+MAX_AUDIO_BYTES = 25 * 1024 * 1024  # Groq Whisper per-request limit
 
 
 def _strip_subtitle_markup(text: str, extension: str) -> str:
@@ -61,3 +63,22 @@ def transcribe(
     if not text:
         raise HTTPException(status_code=422, detail="File contained no usable text")
     return {"text": text, "characters": len(text)}
+
+
+@router.post("/transcribe-audio")
+def transcribe_audio_segment(
+    file: UploadFile = File(...),
+    language: str | None = Form(None),
+    current_user: User = Depends(get_current_user),
+):
+    """Transcribe a short audio segment (live meeting capture) via Groq Whisper."""
+    raw = file.file.read(MAX_AUDIO_BYTES + 1)
+    if not raw:
+        return {"text": ""}
+    if len(raw) > MAX_AUDIO_BYTES:
+        raise HTTPException(status_code=413, detail="Audio segment too large")
+    try:
+        text = transcribe_audio(raw, file.filename or "segment.webm", language)
+    except TranscriptionUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return {"text": sanitize_text(text)}

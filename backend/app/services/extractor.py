@@ -359,6 +359,12 @@ class Extractor:
         )
 
         agenda: list[AgendaItem] = []
+        participants: dict[str, None] = {}  # ordered set
+        # "Name said/asked/mentioned/will/to ..." — a person taking part.
+        speaker_re = re.compile(
+            r"\b([A-Z][a-z]+)\s+(?:said|asked|mentioned|noted|added|suggested|raised|reported|"
+            r"will|volunteered|agreed|confirmed)\b"
+        )
 
         for raw in _split_sentences(transcript):
             # Pull explicit agenda declarations apart into individual items.
@@ -375,6 +381,11 @@ class Extractor:
             sentence = _formalize(raw)
             if len(sentence) < 4:
                 continue
+
+            for match in speaker_re.finditer(sentence):
+                name = match.group(1)
+                if name not in _NON_NAMES:
+                    participants.setdefault(name, None)
 
             if decision_re.search(sentence):
                 by = decided_by_re.search(sentence)
@@ -402,11 +413,20 @@ class Extractor:
             if point.agenda_index is None:
                 point.agenda_index = 0
 
+        # Owners/decision-makers are participants too.
+        for a in actions:
+            if a.owner and a.owner not in _NON_NAMES:
+                participants.setdefault(a.owner, None)
+        for d in decisions:
+            if d.decided_by and d.decided_by not in _NON_NAMES:
+                participants.setdefault(d.decided_by, None)
+
         return MomExtraction(
             agenda=agenda,
             discussion_points=discussion[:150],
             decisions=decisions,
             action_items=actions,
+            participants=list(participants.keys()),
             summary=None,
             confidence=0.4 if (decisions or actions) else 0.2,
         )

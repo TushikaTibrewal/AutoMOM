@@ -185,6 +185,13 @@ export const api = {
       body: form,
     });
   },
+
+  transcribeAudio: (blob: Blob, language?: string) => {
+    const form = new FormData();
+    form.append("file", blob, "segment.webm");
+    if (language) form.append("language", language);
+    return request<{ text: string }>("/api/transcribe-audio", { method: "POST", body: form });
+  },
 };
 
 export function downloadBlob(blob: Blob, filename: string) {

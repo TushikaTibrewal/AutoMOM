@@ -146,3 +146,22 @@ def test_extract_live_blank_transcript_returns_empty(client, auth_headers, sampl
     res = client.post("/api/extract", json=sample_payload, headers=auth_headers)
     assert res.status_code == 200
     assert res.json()["mom"] is None
+
+
+def test_mock_detects_participants():
+    from app.services.extractor import extractor
+
+    transcript = "Ravi will prepare the cost sheet by Friday. Priya suggested a new venue."
+    mom, _, _ = extractor.extract({}, [], transcript)
+    assert "Ravi" in mom.participants
+    assert "Priya" in mom.participants
+
+
+def test_transcribe_audio_requires_groq_key(client, auth_headers):
+    # No GROQ_API_KEY in the test env -> endpoint reports it's unavailable.
+    res = client.post(
+        "/api/transcribe-audio",
+        files={"file": ("segment.webm", b"\x00" * 2048, "audio/webm")},
+        headers=auth_headers,
+    )
+    assert res.status_code == 503

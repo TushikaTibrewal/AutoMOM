@@ -48,6 +48,7 @@ export interface Mom {
   discussion_points: DiscussionPoint[];
   decisions: Decision[];
   action_items: ActionItem[];
+  participants: string[];
   summary: string | null;
   confidence: number | null;
 }
