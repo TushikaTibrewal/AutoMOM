@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     uploads_dir: Path = BASE_DIR / "uploads"
 
     # Limits
-    max_transcript_chars: int = 60_000
+    max_transcript_chars: int = 200_000
     max_upload_bytes: int = 5 * 1024 * 1024
     rate_limit_generate: str = "10/minute"
     rate_limit_auth: str = "20/minute"

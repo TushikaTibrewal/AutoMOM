@@ -4,13 +4,20 @@ import shutil
 import zipfile
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
 from app.models import Template, User
-from app.services.template_engine import TemplateEngineError, list_templates, validate_template_folder
+from app.services.sample import SAMPLE_ATTENDEES, SAMPLE_MEETING, SAMPLE_MOM
+from app.services.template_engine import (
+    TemplateEngineError,
+    list_templates,
+    render_html,
+    validate_template_folder,
+)
 from app.utils.audit import record_audit
 from app.utils.security import get_current_user
 
@@ -34,6 +41,16 @@ def get_templates(db: Session = Depends(get_db)):
             row.description = t["description"]
     db.commit()
     return found
+
+
+@router.get("/templates/{slug}/preview", response_class=HTMLResponse)
+def preview_template(slug: str):
+    """Render the template with canned sample data — used for preview cards."""
+    try:
+        html = render_html(SAMPLE_MEETING, SAMPLE_ATTENDEES, SAMPLE_MOM, slug)
+    except TemplateEngineError:
+        raise HTTPException(status_code=404, detail="Unknown template")
+    return HTMLResponse(content=html)
 
 
 @router.post("/template/upload", status_code=201)

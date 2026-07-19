@@ -116,3 +116,16 @@ def test_templates_endpoint(client):
     assert res.status_code == 200
     slugs = {t["slug"] for t in res.json()}
     assert "classic" in slugs
+
+
+def test_template_preview_renders_sample(client):
+    res = client.get("/api/templates/classic/preview")
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/html")
+    body = res.text
+    assert "Quarterly Curriculum Review" in body
+    assert "1.1" in body  # deterministic subtopic numbering present
+
+
+def test_template_preview_unknown_404(client):
+    assert client.get("/api/templates/does-not-exist/preview").status_code == 404

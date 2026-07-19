@@ -35,6 +35,33 @@ export class ApiError extends Error {
   }
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  email: "Email",
+  password: "Password",
+  full_name: "Full name",
+  title: "Meeting title",
+  transcript: "Meeting notes",
+  name: "Name",
+};
+
+/** Turn a FastAPI error body into one readable sentence.
+ *  422 bodies are a list of {loc, msg}; strings pass through. */
+function formatDetail(body: unknown, fallback: string): string {
+  const detail = (body as { detail?: unknown } | null)?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail.map((err: { loc?: unknown[]; msg?: string }) => {
+      const field = err.loc?.[err.loc.length - 1];
+      const label = typeof field === "string" ? FIELD_LABELS[field] ?? field : "";
+      let msg = (err.msg ?? "is invalid").replace(/^value error,?\s*/i, "");
+      if (msg.length > 120) msg = msg.slice(0, 117) + "…";
+      return label ? `${label}: ${msg}` : msg;
+    });
+    return [...new Set(parts)].join(". ");
+  }
+  return fallback;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   const token = getToken();
@@ -50,8 +77,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!res.ok) {
     let detail = res.statusText;
     try {
-      const body = await res.json();
-      detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+      detail = formatDetail(await res.json(), res.statusText);
     } catch {
       /* keep statusText */
     }
@@ -70,8 +96,7 @@ async function requestBlob(path: string, options: RequestInit = {}): Promise<{ b
   if (!res.ok) {
     let detail = res.statusText;
     try {
-      const body = await res.json();
-      detail = typeof body.detail === "string" ? body.detail : detail;
+      detail = formatDetail(await res.json(), res.statusText);
     } catch {
       /* ignore */
     }
@@ -127,6 +152,7 @@ export const api = {
   recentExports: () => request<ExportRecord[]>("/api/exports/recent"),
 
   listTemplates: () => request<TemplateMeta[]>("/api/templates"),
+  templatePreviewUrl: (slug: string) => url(`/api/templates/${slug}/preview`),
   uploadTemplate: (file: File) => {
     const form = new FormData();
     form.append("file", file);

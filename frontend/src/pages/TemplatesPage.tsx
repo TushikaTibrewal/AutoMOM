@@ -1,7 +1,7 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { LayoutTemplate, Upload } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Eye, LayoutTemplate, Upload, X } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ export default function TemplatesPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
 
   const upload = useMutation({
     mutationFn: (file: File) => api.uploadTemplate(file),
@@ -71,10 +72,27 @@ export default function TemplatesPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
             >
-              <Card className="h-full transition-shadow hover:shadow-md">
-                <CardContent className="flex h-full flex-col gap-2 py-5">
+              <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">
+                {/* Live sample preview rendered by the backend template engine */}
+                <div className="relative h-56 overflow-hidden border-b border-slate-100 bg-white dark:border-slate-800">
+                  <iframe
+                    title={`${t.name} preview`}
+                    src={api.templatePreviewUrl(t.slug)}
+                    className="pointer-events-none absolute left-0 top-0 origin-top-left"
+                    style={{ width: "250%", height: "250%", transform: "scale(0.4)" }}
+                  />
+                  <button
+                    onClick={() => setPreview(t.slug)}
+                    className="absolute inset-0 flex items-end justify-end bg-transparent p-2 opacity-0 transition-opacity hover:bg-slate-900/10 hover:opacity-100"
+                  >
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-700 shadow">
+                      <Eye className="h-3.5 w-3.5" /> Full preview
+                    </span>
+                  </button>
+                </div>
+                <CardContent className="flex flex-col gap-2 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">
                       <LayoutTemplate className="h-5 w-5" />
                     </div>
                     <div>
@@ -90,6 +108,39 @@ export default function TemplatesPage() {
           ))}
         </div>
       )}
+
+      {/* Full-size preview modal */}
+      <AnimatePresence>
+        {preview && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4"
+            onClick={() => setPreview(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.96, y: 12 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: 12 }}
+              className="flex h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+                <p className="text-sm font-semibold">Template preview — sample minutes</p>
+                <Button variant="ghost" size="icon" onClick={() => setPreview(null)} aria-label="Close">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <iframe
+                title="Template full preview"
+                src={api.templatePreviewUrl(preview)}
+                className="h-full w-full bg-white"
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
