@@ -15,6 +15,7 @@ from app.utils.logging import get_logger
 
 logger = get_logger("email")
 RESEND_ENDPOINT = "https://api.resend.com/emails"
+BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email"
 
 
 def _verification_html(full_name: str, link: str) -> str:
@@ -33,6 +34,42 @@ def _verification_html(full_name: str, link: str) -> str:
   </p>
   <p style="font-size:12px;color:#94a3b8">If you didn't create this account, ignore this email.</p>
 </div>"""
+
+
+def _send_brevo_email(to_email: str, to_name: str, subject: str, html_content: str) -> bool:
+    settings = get_settings()
+    try:
+        response = httpx.post(
+            BREVO_ENDPOINT,
+            headers={
+                "accept": "application/json",
+                "api-key": settings.brevo_api_key,
+                "content-type": "application/json",
+            },
+            json={
+                "sender": {
+                    "name": settings.brevo_sender_name,
+                    "email": settings.brevo_sender_email,
+                },
+                "to": [
+                    {
+                        "email": to_email,
+                        "name": to_name,
+                    }
+                ],
+                "subject": subject,
+                "htmlContent": html_content,
+            },
+            timeout=15,
+        )
+        if response.status_code >= 400:
+            logger.error("Brevo send failed (%s): %s", response.status_code, response.text[:300])
+            return False
+        logger.info("Verification email sent via Brevo to %s", to_email)
+        return True
+    except httpx.HTTPError as exc:
+        logger.error("Brevo request error for %s: %s", to_email, exc)
+        return False
 
 
 def _send_smtp_email(to_email: str, subject: str, html_content: str) -> bool:
@@ -65,16 +102,20 @@ def _send_smtp_email(to_email: str, subject: str, html_content: str) -> bool:
 
 
 def send_verification_email(email: str, full_name: str, token: str) -> bool:
-    """Returns True if an email was actually dispatched via SMTP or Resend."""
+    """Returns True if an email was actually dispatched via Brevo, SMTP or Resend."""
     settings = get_settings()
     link = f"{settings.frontend_url.rstrip('/')}/verify?token={token}"
     html_content = _verification_html(full_name, link)
 
-    # 1. Prefer SMTP if configured
+    # 1. Prefer Brevo API if configured (HTTP based, works on Render free tier without custom domain)
+    if settings.brevo_api_key and settings.brevo_sender_email:
+        return _send_brevo_email(email, full_name, "Verify your AutoMOM account", html_content)
+
+    # 2. Fall back to SMTP if configured
     if settings.smtp_host and settings.smtp_username and settings.smtp_password:
         return _send_smtp_email(email, "Verify your AutoMOM account", html_content)
 
-    # 2. Fall back to Resend API
+    # 3. Fall back to Resend API
     if settings.resend_api_key:
         try:
             response = httpx.post(
@@ -97,6 +138,6 @@ def send_verification_email(email: str, full_name: str, token: str) -> bool:
             logger.error("Resend request error for %s: %s", email, exc)
             return False
 
-    # 3. Fallback: log for local dev
+    # 4. Fallback: log for local dev
     logger.warning("No email provider configured — verification link for %s: %s", email, link)
     return False
