@@ -10,6 +10,8 @@ backend/.env
 
 node_modules/
 frontend/dist/
+extension/dist/
+*.zip
 frontend/.env
 
 .DS_Store

@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from app.api import auth, export, generate, meetings, templates, transcribe
+from app.api import auth, export, generate, live_ws, meetings, templates, transcribe
 from app.api.limiter import limiter
 from app.config import get_settings
 from app.database import init_db
@@ -65,3 +65,4 @@ app.include_router(meetings.router)
 app.include_router(export.router)
 app.include_router(templates.router)
 app.include_router(transcribe.router)
+app.include_router(live_ws.router)

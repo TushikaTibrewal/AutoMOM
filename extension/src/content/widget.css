@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom widget-specific styles inside Shadow DOM */
+:host {
+  all: initial; /* reset browser styles for the host */
+}
+
+.draggable-widget {
+  font-family: 'Inter', system-ui, sans-serif;
+  user-select: none;
+}
+
+/* Glassmorphism background for premium look */
+.glass {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.handle {
+  cursor: grab;
+}
+
+.handle:active {
+  cursor: grabbing;
+}

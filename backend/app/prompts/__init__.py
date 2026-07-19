@@ -1,3 +1,8 @@
-from app.prompts.extraction import CURRENT_PROMPT_VERSION, build_messages, get_prompt
+from app.prompts.extraction import (
+    CURRENT_PROMPT_VERSION,
+    build_merge_messages,
+    build_messages,
+    get_prompt,
+)
 
-__all__ = ["CURRENT_PROMPT_VERSION", "build_messages", "get_prompt"]
+__all__ = ["CURRENT_PROMPT_VERSION", "build_messages", "build_merge_messages", "get_prompt"]

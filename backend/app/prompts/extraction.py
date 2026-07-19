@@ -100,3 +100,41 @@ def build_messages(
         {"role": "system", "content": get_prompt(version)},
         {"role": "user", "content": user_content},
     ]
+
+
+MERGE_INSTRUCTION = (
+    "\n\nThis is a LIVE meeting being transcribed incrementally. You are given the "
+    "minutes extracted so far (CURRENT_MINUTES) and the full transcript to date. "
+    "Produce the UPDATED complete minutes by MERGING new information into the current "
+    "minutes:\n"
+    "- Keep all still-valid existing items; do not drop points that are still supported.\n"
+    "- Add only genuinely new agenda items, discussion points, decisions and action items.\n"
+    "- Do NOT duplicate points that are already present (same meaning = same item).\n"
+    "- Update an existing action item in place if its owner/date/status became clearer.\n"
+    "- Never invent anything not supported by the transcript.\n"
+)
+
+
+def build_merge_messages(
+    meeting_meta: dict,
+    attendees: list[dict],
+    transcript: str,
+    current_minutes: dict,
+    version: str | None = None,
+) -> list[dict]:
+    """Merge-mode: LLM updates existing minutes instead of regenerating."""
+    user_content = (
+        "MEETING METADATA (JSON):\n"
+        + json.dumps(meeting_meta, ensure_ascii=False)
+        + "\n\nATTENDEES (JSON):\n"
+        + json.dumps(attendees, ensure_ascii=False)
+        + "\n\nCURRENT_MINUTES (JSON, merge into this):\n"
+        + json.dumps(current_minutes, ensure_ascii=False)
+        + "\n\n<<<TRANSCRIPT>>>\n"
+        + transcript
+        + "\n<<<TRANSCRIPT>>>"
+    )
+    return [
+        {"role": "system", "content": get_prompt(version) + MERGE_INSTRUCTION},
+        {"role": "user", "content": user_content},
+    ]

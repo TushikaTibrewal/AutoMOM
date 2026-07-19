@@ -16,7 +16,7 @@ import re
 from pydantic import ValidationError
 
 from app.config import get_settings
-from app.prompts import CURRENT_PROMPT_VERSION, build_messages
+from app.prompts import CURRENT_PROMPT_VERSION, build_merge_messages, build_messages
 from app.schemas.mom import ActionItem, AgendaItem, Decision, DiscussionPoint, MomExtraction
 from app.utils.logging import get_logger
 from app.utils.sanitize import neutralize_prompt_injection, sanitize_text
@@ -179,6 +179,36 @@ class Extractor:
 
         label = "mock" if not failed else f"mock (fallback from {', '.join(failed)})"
         return self._extract_mock(clean), label, CURRENT_PROMPT_VERSION
+
+    def merge(
+        self,
+        meeting_meta: dict,
+        attendees: list[dict],
+        transcript: str,
+        current_minutes: dict | None,
+    ) -> tuple[MomExtraction, str, str]:
+        """Incremental update: merge new transcript into existing minutes.
+
+        With an LLM, sends CURRENT_MINUTES so it updates in place (no duplicates,
+        no lost points). The mock has no memory, so it re-extracts from the full
+        cumulative transcript — which is naturally additive and deduped.
+        """
+        clean = preprocess_transcript(transcript, self.settings.max_transcript_chars)
+        if not current_minutes:
+            return self.extract(meeting_meta, attendees, transcript)
+
+        messages = build_merge_messages(meeting_meta, attendees, clean, current_minutes)
+        handlers = {
+            "openai": self._extract_openai,
+            "groq": self._extract_groq,
+            "gemini": self._extract_gemini,
+        }
+        for provider in self._provider_chain():
+            try:
+                return handlers[provider](messages), provider, CURRENT_PROMPT_VERSION
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("%s merge failed (%s)", provider, exc)
+        return self._extract_mock(clean), "mock", CURRENT_PROMPT_VERSION
 
     # --------------------------------------------------------------- providers
     def _provider_chain(self) -> list[str]:

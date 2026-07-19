@@ -1,0 +1,32 @@
+{
+  "name": "automom-extension",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AutoMOM — live Minutes of Meeting for Google Meet, Zoom and Microsoft Teams.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "zip": "cd dist && bestzip ../automom-extension.zip *"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.510.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "2.0.0-beta.28",
+    "@types/chrome": "^0.0.322",
+    "@types/node": "^20.11.24",
+    "@types/react": "^18.3.20",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.4.1",
+    "autoprefixer": "^10.4.21",
+    "bestzip": "^2.2.1",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}
