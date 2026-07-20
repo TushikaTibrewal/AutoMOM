@@ -70,6 +70,10 @@ PROMPTS: dict[str, str] = {
         "    (they spoke, were addressed by name, or were named as present). Names only,\n"
         "    de-duplicated. Do NOT invent names or include people mentioned only as absent or as\n"
         "    third parties. Empty list if no names are identifiable.\n"
+        "11. The transcript may be written in Hinglish, Hindi, or mixed language format (e.g.,\n"
+        "    'Ravi Friday tak budget sheet banayega', 'decided to buy new screens ki jarurat hai').\n"
+        "    You MUST translate and write ALL extracted agenda items, discussion points, decisions,\n"
+        "    and action item descriptions into clear, formal, professional English.\n"
     ),
 }
 

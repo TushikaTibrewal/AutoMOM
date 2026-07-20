@@ -124,3 +124,18 @@ def extract_live(
     except TemplateEngineError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"mom": mom.model_dump(), "html_preview": html, "provider": provider}
+
+
+@router.post("/translate")
+def translate_transcript(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+):
+    """Translate raw notes (e.g., Hinglish, Hindi) into formal English."""
+    text = str(payload.get("text", "")).strip()
+    if not text:
+        return {"translated_text": ""}
+    if len(text) > settings.max_transcript_chars:
+        raise HTTPException(status_code=413, detail="Text exceeds maximum limit")
+    translated = extractor.translate_text(text)
+    return {"translated_text": translated}

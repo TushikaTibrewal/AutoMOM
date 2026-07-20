@@ -210,6 +210,58 @@ class Extractor:
                 logger.warning("%s merge failed (%s)", provider, exc)
         return self._extract_mock(clean), "mock", CURRENT_PROMPT_VERSION
 
+    def translate_text(self, text: str) -> str:
+        """Translate raw text (e.g. Hinglish, Hindi, or informal notes) to clear, formal English."""
+        if not text.strip():
+            return ""
+        clean = preprocess_transcript(text, self.settings.max_transcript_chars)
+        prompt_system = (
+            "You are an expert translator and editor for meeting notes.\n"
+            "Your task is to take meeting notes provided in Hinglish, Hindi, or any informal mixed language, "
+            "and translate/rewrite them into clear, professional, well-structured English meeting notes.\n"
+            "Preserve all names, dates, owners, decisions, and action items accurately.\n"
+            "Return ONLY the translated English plain text without any extra commentary or code fences."
+        )
+        messages = [
+            {"role": "system", "content": prompt_system},
+            {"role": "user", "content": clean},
+        ]
+        for provider in self._provider_chain():
+            try:
+                if provider == "openai":
+                    from openai import OpenAI
+                    client = OpenAI(api_key=self.settings.openai_api_key, timeout=self.settings.ai_timeout_seconds)
+                    resp = client.chat.completions.create(
+                        model=self.settings.openai_model,
+                        messages=messages,
+                        temperature=0.2,
+                    )
+                    return resp.choices[0].message.content.strip()
+                elif provider == "groq":
+                    from openai import OpenAI
+                    client = OpenAI(
+                        api_key=self.settings.groq_api_key,
+                        base_url="https://api.groq.com/openai/v1",
+                        timeout=self.settings.ai_timeout_seconds,
+                    )
+                    resp = client.chat.completions.create(
+                        model=self.settings.groq_model,
+                        messages=messages,
+                        temperature=0.2,
+                    )
+                    return resp.choices[0].message.content.strip()
+                elif provider == "gemini":
+                    import google.generativeai as genai
+                    genai.configure(api_key=self.settings.gemini_api_key)
+                    model = genai.GenerativeModel("gemini-2.0-flash", system_instruction=prompt_system)
+                    resp = model.generate_content(clean)
+                    return resp.text.strip()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Translation failed with %s: %s", provider, exc)
+
+        lines = [_formalize(line) for line in clean.splitlines() if line.strip()]
+        return "\n".join(lines)
+
     # --------------------------------------------------------------- providers
     def _provider_chain(self) -> list[str]:
         """Ordered list of real providers to attempt.

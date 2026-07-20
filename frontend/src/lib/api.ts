@@ -135,6 +135,12 @@ export const api = {
     meeting_id?: number | null;
   }) => request<GenerateResponse>("/api/generate", { method: "POST", body: JSON.stringify(payload) }),
 
+  translate: (text: string) =>
+    request<{ translated_text: string }>("/api/translate", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+
   preview: (payload: { meeting: MeetingInfo; attendees: Attendee[]; mom: Mom; template_slug: string }) =>
     request<{ html_preview: string }>("/api/preview", { method: "POST", body: JSON.stringify(payload) }),
 

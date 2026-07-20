@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, Mic, MicOff, Sparkles, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Languages, Mic, MicOff, Sparkles, Upload } from "lucide-react";
 import type { Attendee, MeetingInfo } from "@/types";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -55,6 +55,7 @@ export default function NewMeetingPage() {
   const [transcript, setTranscript] = useState(draft.transcript);
   const [templateSlug, setTemplateSlug] = useState(draft.template_slug);
   const [generating, setGenerating] = useState(false);
+  const [translating, setTranslating] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -96,6 +97,25 @@ export default function NewMeetingPage() {
       toast("success", `Imported ${text.length.toLocaleString()} characters`);
     } catch (err) {
       toast("error", err instanceof ApiError ? err.message : "Upload failed");
+    }
+  };
+
+  const handleTranslate = async () => {
+    if (!transcript.trim()) {
+      toast("error", "Enter some notes to translate first");
+      return;
+    }
+    setTranslating(true);
+    try {
+      const { translated_text } = await api.translate(transcript);
+      if (translated_text) {
+        setTranscript(translated_text);
+        toast("success", "Notes translated to English");
+      }
+    } catch (err) {
+      toast("error", err instanceof ApiError ? err.message : "Translation failed");
+    } finally {
+      setTranslating(false);
     }
   };
 
@@ -265,6 +285,16 @@ export default function NewMeetingPage() {
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
                     <Upload className="h-4 w-4" /> Upload transcript
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTranslate}
+                    loading={translating}
+                    disabled={!transcript.trim()}
+                    title="Translate Hinglish/Hindi notes to English"
+                  >
+                    <Languages className="h-4 w-4" /> Translate to English
                   </Button>
                   <input
                     ref={fileInputRef}
