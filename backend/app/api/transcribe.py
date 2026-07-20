@@ -66,6 +66,21 @@ def transcribe(
     return {"text": text, "characters": len(text)}
 
 
+# Common Latin-script Hindi words/particles that show up when Whisper labels a
+# Hindi/English code-switched segment as plain "English" — a cheap Hinglish tell.
+_HINGLISH_MARKERS = re.compile(
+    r"\b(hai|hain|nahi|nahin|kya|kyu|kyun|matlab|bhai|yaar|accha|acha|theek|thik|"
+    r"karo|kar[oe]nge|kijiye|chalo|abhi|bilkul|samajh|batao|bolo|haan|zyada)\b",
+    re.IGNORECASE,
+)
+
+
+def _refine_language(text: str, detected: str | None) -> str | None:
+    if detected == "English" and _HINGLISH_MARKERS.search(text):
+        return "Hinglish"
+    return detected
+
+
 @router.post("/transcribe-audio")
 def transcribe_audio_segment(
     file: UploadFile = File(...),
@@ -75,14 +90,15 @@ def transcribe_audio_segment(
     """Transcribe a short audio segment (live meeting capture) via Groq Whisper."""
     raw = file.file.read(MAX_AUDIO_BYTES + 1)
     if not raw:
-        return {"text": ""}
+        return {"text": "", "language": None}
     if len(raw) > MAX_AUDIO_BYTES:
         raise HTTPException(status_code=413, detail="Audio segment too large")
     try:
-        text = transcribe_audio(raw, file.filename or "segment.webm", language)
+        result = transcribe_audio(raw, file.filename or "segment.webm", language)
     except TranscriptionUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
-    return {"text": sanitize_text(text)}
+    text = sanitize_text(result.text)
+    return {"text": text, "language": _refine_language(text, result.language)}
 
 
 @router.post("/detect-participants")

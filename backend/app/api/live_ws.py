@@ -11,6 +11,7 @@ live minutes. Sessions live in memory; "save" persists to the database.
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -33,6 +34,11 @@ router = APIRouter(tags=["live"])
 settings = get_settings()
 logger = get_logger("live_ws")
 
+# Live minutes re-merge cadence: fire on either a burst of new text or, failing
+# that, once this many seconds have passed since the last merge (spec: 15-30s).
+MERGE_MIN_NEW_CHARS = 80
+MERGE_BACKSTOP_SECONDS = 20.0
+
 END_CUES = (
     "meeting is adjourned", "let's wrap up", "lets wrap up", "that's all for today",
     "thats all for today", "meeting is over", "meeting is concluded", "wrap up the meeting",
@@ -45,6 +51,7 @@ class TranscriptLine:
     ts: str
     speaker: str
     text: str
+    language: str | None = None
 
 
 @dataclass
@@ -57,6 +64,7 @@ class LiveSession:
     mom: MomExtraction | None = None
     ended: bool = False
     last_extract_len: int = 0
+    last_extract_at: float = 0.0
     extracting: bool = False
     sockets: set[WebSocket] = field(default_factory=set)
 
@@ -121,10 +129,18 @@ async def _reextract_and_broadcast(session: LiveSession) -> None:
     if session.extracting:
         return
     text = session.full_text.strip()
-    if len(text) < 40 or len(text) - session.last_extract_len < 80:
+    if len(text) < 40:
+        return
+    new_chars = len(text) - session.last_extract_len
+    if new_chars <= 0:
+        return
+    due_for_backstop = time.monotonic() - session.last_extract_at >= MERGE_BACKSTOP_SECONDS
+    if new_chars < MERGE_MIN_NEW_CHARS and not due_for_backstop:
         return
     session.extracting = True
     session.last_extract_len = len(text)
+    session.last_extract_at = time.monotonic()
+    await _broadcast(session, {"type": "ai_state", "state": "extracting"})
     try:
         mom, provider, _ = await run_in_threadpool(
             extractor.merge,
@@ -193,8 +209,12 @@ async def live_ws(websocket: WebSocket, session_id: str):
                     continue
                 speaker = sanitize_text(str(msg.get("speaker", "")))[:80]
                 ts = str(msg.get("ts") or datetime.now(timezone.utc).strftime("%H:%M:%S"))
-                session.lines.append(TranscriptLine(ts=ts, speaker=speaker, text=text))
-                await _broadcast(session, {"type": "transcript", "line": {"ts": ts, "speaker": speaker, "text": text}})
+                language = msg.get("language")
+                session.lines.append(TranscriptLine(ts=ts, speaker=speaker, text=text, language=language))
+                await _broadcast(
+                    session,
+                    {"type": "transcript", "line": {"ts": ts, "speaker": speaker, "text": text, "language": language}},
+                )
                 if not session.ended and _detect_end(text):
                     session.ended = True
                     await _broadcast(session, {"type": "ended"})

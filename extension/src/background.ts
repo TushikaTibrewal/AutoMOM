@@ -10,7 +10,14 @@ let state: SessionState = {
   pausedMs: 0,
   platform: "unknown",
   meetingTitle: "Live Meeting",
+  aiState: "listening",
+  language: null,
 };
+
+// Most recent DOM-scraped active speaker (content script), used to label
+// segments Whisper can't diarize on its own.
+let lastActiveSpeaker = "";
+let updatingFlashTimer: any = null;
 
 // Keep track of connected ports (content script/sidepanel) to keep service worker alive
 const ports = new Set<chrome.runtime.Port>();
@@ -99,6 +106,16 @@ async function connectWebSocket() {
         if (data.type === "ended") {
           state.status = "ended";
           broadcast({ type: "state", state });
+        } else if (data.type === "ai_state") {
+          setAiState(data.state);
+        } else if (data.type === "mom") {
+          // Flash "Updating MoM" so the widget shows the merge landing, then
+          // fall back to "Listening" once the pipeline is idle again.
+          setAiState("updating");
+          if (updatingFlashTimer) clearTimeout(updatingFlashTimer);
+          updatingFlashTimer = setTimeout(() => {
+            if (state.status === "recording") setAiState("listening");
+          }, 1500);
         }
       } catch (e) {
         console.error("Failed to parse WS frame", e);
@@ -123,17 +140,31 @@ async function connectWebSocket() {
   }
 }
 
+function setAiState(aiState: SessionState["aiState"]) {
+  state.aiState = aiState;
+  broadcast({ type: "state", state });
+}
+
 function updateStatus(status: CaptureStatus) {
   state.status = status;
   if (status === "idle") {
     state.sessionId = "";
     state.startedAt = null;
     state.pausedMs = 0;
+    state.aiState = "listening";
+    state.language = null;
+    lastActiveSpeaker = "";
+    if (updatingFlashTimer) {
+      clearTimeout(updatingFlashTimer);
+      updatingFlashTimer = null;
+    }
     if (ws) {
       ws.close();
       ws = null;
     }
     closeOffscreen();
+  } else if (status === "recording") {
+    state.aiState = "listening";
   }
   broadcast({ type: "state", state });
 }
@@ -245,17 +276,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     sendResponse({ success: true });
   } else if (message.type === "TRANSCRIPT_SEGMENT") {
-    // Segment from offscreen document -> send to backend WS
+    // Segment from offscreen document -> send to backend WS.
+    // Whisper doesn't diarize, so prefer the DOM-scraped active speaker when
+    // the offscreen document only knows the generic "Speaker" placeholder.
+    if (message.language) state.language = message.language;
+    const speaker =
+      message.speaker && message.speaker !== "Speaker" ? message.speaker : lastActiveSpeaker || "Participant";
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(
         JSON.stringify({
           type: "segment",
           text: message.text,
-          speaker: message.speaker || "Participant",
+          speaker,
           ts: message.ts,
+          language: message.language || null,
         })
       );
     }
+    broadcast({ type: "state", state });
+    sendResponse({ success: true });
+  } else if (message.type === "AI_STATE") {
+    setAiState(message.state);
+    sendResponse({ success: true });
+  } else if (message.type === "ACTIVE_SPEAKER") {
+    if (message.name) lastActiveSpeaker = message.name;
     sendResponse({ success: true });
   } else if (message.type === "ROSTER_NAMES") {
     if (ws && ws.readyState === WebSocket.OPEN) {

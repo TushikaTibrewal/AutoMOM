@@ -125,6 +125,8 @@ async function uploadChunk(blob: Blob) {
   const formData = new FormData();
   formData.append("file", blob, "segment.webm");
 
+  chrome.runtime.sendMessage({ type: "AI_STATE", state: "transcribing" }).catch(() => {});
+
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -138,20 +140,27 @@ async function uploadChunk(blob: Blob) {
       const data = await res.json();
       const text = data.text?.trim();
       if (text) {
-        console.log("Transcribed chunk:", text);
-        // Send segment to background
+        console.log("Transcribed chunk:", text, "lang:", data.language);
+        chrome.runtime.sendMessage({ type: "AI_STATE", state: "extracting" }).catch(() => {});
+        // Send segment to background; speaker "Speaker" is a placeholder the
+        // background worker replaces with the last DOM-scraped active speaker.
         chrome.runtime.sendMessage({
           type: "TRANSCRIPT_SEGMENT",
           text,
-          speaker: "Speaker", // Whisper does not do speaker diarization, default to Speaker
+          speaker: "Speaker",
+          language: data.language || null,
           ts: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
         }).catch(() => {});
+      } else {
+        chrome.runtime.sendMessage({ type: "AI_STATE", state: "listening" }).catch(() => {});
       }
     } else {
       console.warn("Chunk transcription failed with code:", res.status);
+      chrome.runtime.sendMessage({ type: "AI_STATE", state: "listening" }).catch(() => {});
     }
   } catch (err) {
     console.error("Error uploading chunk to backend:", err);
+    chrome.runtime.sendMessage({ type: "AI_STATE", state: "listening" }).catch(() => {});
   }
 }
 

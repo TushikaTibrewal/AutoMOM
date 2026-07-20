@@ -1,7 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { SessionState, Platform } from "../types";
+import { SessionState, Platform, AiState } from "../types";
 import widgetStyles from "./widget.css?inline";
+
+const MIN_WIDGET_WIDTH = 220;
+const MAX_WIDGET_WIDTH = 420;
+
+const AI_STATE_LABEL: Record<AiState, string> = {
+  listening: "Listening",
+  transcribing: "Transcribing",
+  extracting: "Extracting",
+  updating: "Updating MoM",
+};
 
 // ------------------------------------------------------------- DOM Scraping Helpers
 function getPlatform(): Platform {
@@ -98,6 +108,26 @@ function scrapeRoster(platform: Platform): string[] {
   return Array.from(names).filter((n) => n.length > 1);
 }
 
+// Best-effort active-speaker lookup: meeting UIs mark the currently-talking
+// tile with a "speaking" aria-label or class, regardless of platform. Whisper
+// itself can't diarize, so this is what lets us label segments by name.
+function scrapeActiveSpeaker(): string | null {
+  try {
+    const el = document.querySelector(
+      '[aria-label*="speaking" i], [class*="speaking" i]'
+    );
+    if (!el) return null;
+    const label = el.getAttribute("aria-label");
+    const fromLabel = label?.match(/^(.*?)\s+is speaking/i)?.[1];
+    if (fromLabel) return fromLabel.trim();
+    const text = el.textContent?.trim().split("\n")[0]?.trim();
+    if (text && text.length > 1 && text.length < 50) return text;
+  } catch (e) {
+    console.error("Active speaker scrape failed", e);
+  }
+  return null;
+}
+
 // ------------------------------------------------------------- React Floating Widget
 const FloatingWidget: React.FC = () => {
   const platform = getPlatform();
@@ -114,9 +144,13 @@ const FloatingWidget: React.FC = () => {
   const [position, setPosition] = useState({ x: 30, y: 100 });
   const [isDragging, setIsDragging] = useState(false);
   const [showEndedPrompt, setShowEndedPrompt] = useState(false);
-  
+  const [collapsed, setCollapsed] = useState(false);
+  const [width, setWidth] = useState(260);
+  const [isResizing, setIsResizing] = useState(false);
+
   const portRef = useRef<chrome.runtime.Port | null>(null);
   const dragStart = useRef({ x: 0, y: 0 });
+  const resizeStart = useRef({ x: 0, width: 260 });
   const durationInterval = useRef<any>(null);
 
   // Connect to background to get live status updates and keep background worker alive
@@ -197,6 +231,23 @@ const FloatingWidget: React.FC = () => {
     return () => clearInterval(rosterInterval);
   }, [session.status, platform]);
 
+  // Track the currently-talking tile so segments can be labelled by speaker.
+  useEffect(() => {
+    if (session.status !== "recording") return;
+
+    const sendActiveSpeaker = () => {
+      const name = scrapeActiveSpeaker();
+      if (name) {
+        chrome.runtime.sendMessage({ type: "ACTIVE_SPEAKER", name }).catch(() => {});
+      }
+    };
+
+    sendActiveSpeaker();
+    const speakerInterval = setInterval(sendActiveSpeaker, 3000);
+
+    return () => clearInterval(speakerInterval);
+  }, [session.status]);
+
   // Handle Drag Events
   const onMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
@@ -229,6 +280,32 @@ const FloatingWidget: React.FC = () => {
       window.removeEventListener("mouseup", onMouseUp);
     };
   }, [isDragging]);
+
+  // Handle Resize Events (bottom-right grip)
+  const onResizeMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsResizing(true);
+    resizeStart.current = { x: e.clientX, width };
+  };
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      const next = resizeStart.current.width + (e.clientX - resizeStart.current.x);
+      setWidth(Math.max(MIN_WIDGET_WIDTH, Math.min(MAX_WIDGET_WIDTH, next)));
+    };
+    const onMouseUp = () => setIsResizing(false);
+
+    if (isResizing) {
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [isResizing]);
 
   const handleStart = () => {
     chrome.runtime.sendMessage({
@@ -268,8 +345,8 @@ const FloatingWidget: React.FC = () => {
 
   return (
     <div
-      className="draggable-widget fixed z-[99999] w-[260px] glass rounded-xl text-slate-100 flex flex-col overflow-hidden"
-      style={{ left: `${position.x}px`, top: `${position.y}px` }}
+      className="draggable-widget fixed z-[99999] glass rounded-xl text-slate-100 flex flex-col overflow-hidden"
+      style={{ left: `${position.x}px`, top: `${position.y}px`, width: `${width}px` }}
     >
       {/* Widget Header/Handle */}
       <div
@@ -280,93 +357,130 @@ const FloatingWidget: React.FC = () => {
           <span className="h-2 w-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span>
           <span>AutoMOM Live</span>
         </div>
-        <span className="text-[10px] text-slate-400 uppercase tracking-wider">{platform}</span>
-      </div>
-
-      {/* Widget Body */}
-      <div className="p-4 flex flex-col gap-3.5">
-        {/* State Display */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-xs text-slate-400 font-medium">Session Timer</span>
-            <span className="text-xl font-bold tracking-tight">{durationText}</span>
-          </div>
-          <div className="flex flex-col items-end">
-            <span className="text-xs text-slate-400 font-medium">Status</span>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              {session.status === "recording" && (
-                <>
-                  <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse"></span>
-                  <span className="text-xs font-bold text-rose-400 uppercase">Live Recording</span>
-                </>
-              )}
-              {session.status === "paused" && (
-                <>
-                  <span className="h-2 w-2 rounded-full bg-amber-500"></span>
-                  <span className="text-xs font-bold text-amber-400 uppercase">Paused</span>
-                </>
-              )}
-              {session.status === "ended" && (
-                <>
-                  <span className="h-2 w-2 rounded-full bg-slate-500"></span>
-                  <span className="text-xs font-bold text-slate-400 uppercase">Ended</span>
-                </>
-              )}
-              {session.status === "idle" && (
-                <>
-                  <span className="h-2 w-2 rounded-full bg-slate-600"></span>
-                  <span className="text-xs font-semibold text-slate-400 uppercase">Ready</span>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Buttons Controls */}
-        <div className="flex flex-col gap-2">
-          {session.status === "idle" ? (
-            <button
-              onClick={handleStart}
-              className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 transition-all font-semibold rounded-lg text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-1.5"
-            >
-              Start Recording
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              {session.status === "recording" ? (
-                <button
-                  onClick={handlePause}
-                  className="flex-1 py-1.5 bg-amber-600 hover:bg-amber-500 transition-all font-semibold rounded-md text-xs flex items-center justify-center"
-                >
-                  Pause
-                </button>
-              ) : (
-                session.status === "paused" && (
-                  <button
-                    onClick={handleResume}
-                    className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-500 transition-all font-semibold rounded-md text-xs flex items-center justify-center"
-                  >
-                    Resume
-                  </button>
-                )
-              )}
-              <button
-                onClick={handleStop}
-                className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 transition-all font-semibold rounded-md text-xs flex items-center justify-center"
-              >
-                Stop
-              </button>
-            </div>
-          )}
-
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-slate-400 uppercase tracking-wider">{platform}</span>
           <button
-            onClick={handleOpenSidePanel}
-            className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 border border-white/5 transition-all text-slate-300 font-semibold rounded-md text-xs flex items-center justify-center gap-1"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => setCollapsed((c) => !c)}
+            className="text-slate-400 hover:text-slate-200 text-xs leading-none w-4 h-4 flex items-center justify-center"
+            title={collapsed ? "Expand" : "Collapse"}
           >
-            Open Live MoM
+            {collapsed ? "▾" : "▴"}
           </button>
         </div>
       </div>
+
+      {/* Widget Body */}
+      {!collapsed && (
+        <div className="p-4 flex flex-col gap-3.5">
+          {/* State Display */}
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-xs text-slate-400 font-medium">Session Timer</span>
+              <span className="text-xl font-bold tracking-tight">{durationText}</span>
+            </div>
+            <div className="flex flex-col items-end">
+              <span className="text-xs text-slate-400 font-medium">Status</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {session.status === "recording" && (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse"></span>
+                    <span className="text-xs font-bold text-rose-400 uppercase">Live Recording</span>
+                  </>
+                )}
+                {session.status === "paused" && (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-amber-500"></span>
+                    <span className="text-xs font-bold text-amber-400 uppercase">Paused</span>
+                  </>
+                )}
+                {session.status === "ended" && (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-slate-500"></span>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Ended</span>
+                  </>
+                )}
+                {session.status === "idle" && (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-slate-600"></span>
+                    <span className="text-xs font-semibold text-slate-400 uppercase">Ready</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* AI Pipeline State + Detected Language */}
+          {session.status === "recording" && (
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="px-2 py-0.5 rounded-full bg-indigo-950/60 border border-indigo-800/60 text-indigo-300 font-semibold uppercase tracking-wide">
+                {AI_STATE_LABEL[session.aiState || "listening"]}
+              </span>
+              {session.language && (
+                <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-semibold">
+                  {session.language}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Buttons Controls */}
+          <div className="flex flex-col gap-2">
+            {session.status === "idle" ? (
+              <button
+                onClick={handleStart}
+                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 transition-all font-semibold rounded-lg text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-1.5"
+              >
+                Start Recording
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                {session.status === "recording" ? (
+                  <button
+                    onClick={handlePause}
+                    className="flex-1 py-1.5 bg-amber-600 hover:bg-amber-500 transition-all font-semibold rounded-md text-xs flex items-center justify-center"
+                  >
+                    Pause
+                  </button>
+                ) : (
+                  session.status === "paused" && (
+                    <button
+                      onClick={handleResume}
+                      className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-500 transition-all font-semibold rounded-md text-xs flex items-center justify-center"
+                    >
+                      Resume
+                    </button>
+                  )
+                )}
+                <button
+                  onClick={handleStop}
+                  className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 transition-all font-semibold rounded-md text-xs flex items-center justify-center"
+                >
+                  Stop
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={handleOpenSidePanel}
+              className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 border border-white/5 transition-all text-slate-300 font-semibold rounded-md text-xs flex items-center justify-center gap-1"
+            >
+              Open Live MoM
+            </button>
+          </div>
+
+          {/* Resize grip (bottom-right) */}
+          <div
+            onMouseDown={onResizeMouseDown}
+            className="absolute bottom-1 right-1 w-3 h-3 cursor-nwse-resize opacity-40 hover:opacity-80"
+            title="Drag to resize"
+          >
+            <svg viewBox="0 0 10 10" className="w-full h-full">
+              <path d="M9 1 L1 9 M9 5 L5 9 M9 9 L9 9" stroke="currentColor" strokeWidth="1.2" fill="none" />
+            </svg>
+          </div>
+        </div>
+      )}
 
       {/* Auto-Ended Alert Prompt */}
       {showEndedPrompt && (

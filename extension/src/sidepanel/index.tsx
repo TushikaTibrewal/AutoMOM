@@ -276,17 +276,38 @@ const App: React.FC = () => {
   return (
     <div className="flex flex-col h-screen max-h-screen bg-slate-950 text-slate-100 select-text overflow-hidden">
       {/* Header */}
-      <header className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-indigo-500 animate-pulse"></span>
-          <h1 className="text-sm font-bold tracking-tight text-slate-200">{session.meetingTitle || "AutoMOM Live Editor"}</h1>
+      <header className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-indigo-500 animate-pulse"></span>
+            <h1 className="text-sm font-bold tracking-tight text-slate-200">{session.meetingTitle || "AutoMOM Live Editor"}</h1>
+          </div>
+          <button
+            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+            className="text-xs px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded-md border border-slate-700 transition-all text-slate-300"
+          >
+            API Settings
+          </button>
         </div>
-        <button
-          onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-          className="text-xs px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded-md border border-slate-700 transition-all text-slate-300"
-        >
-          API Settings
-        </button>
+        {/* Meeting metadata badges */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-semibold uppercase">
+            {session.platform}
+          </span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-semibold capitalize">
+            {session.status}
+          </span>
+          {session.status === "recording" && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-950/60 border border-indigo-800/60 text-indigo-300 font-semibold capitalize">
+              {session.aiState || "listening"}
+            </span>
+          )}
+          {session.language && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 font-semibold">
+              {session.language}
+            </span>
+          )}
+        </div>
       </header>
 
       {/* Settings Modal overlay */}
@@ -398,7 +419,10 @@ const App: React.FC = () => {
                 <div key={idx} className="flex flex-col gap-0.5 bg-slate-900/40 p-2.5 rounded-lg border border-white/5">
                   <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
                     <span className="text-indigo-400 font-semibold">{line.speaker}</span>
-                    <span>{line.ts}</span>
+                    <span className="flex items-center gap-1.5">
+                      {line.language && <span className="text-slate-500">{line.language}</span>}
+                      <span>{line.ts}</span>
+                    </span>
                   </div>
                   <p className="text-xs text-slate-200 leading-relaxed font-normal">{line.text}</p>
                 </div>

@@ -34,9 +34,13 @@ export interface TranscriptLine {
   ts: string;
   speaker: string;
   text: string;
+  language?: string | null;
 }
 
 export type CaptureStatus = "idle" | "recording" | "paused" | "ended";
+
+// Pipeline stage shown by the widget: mic capture -> Whisper -> LLM merge -> UI refresh.
+export type AiState = "listening" | "transcribing" | "extracting" | "updating";
 
 export interface SessionState {
   sessionId: string;
@@ -45,4 +49,6 @@ export interface SessionState {
   pausedMs: number;
   platform: Platform;
   meetingTitle: string;
+  aiState?: AiState;
+  language?: string | null;
 }

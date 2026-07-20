@@ -6,6 +6,8 @@ is fast and covered by the same GROQ_API_KEY already used for extraction.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import httpx
 
 from app.config import get_settings
@@ -14,12 +16,24 @@ from app.utils.logging import get_logger
 logger = get_logger("transcribe")
 GROQ_AUDIO_ENDPOINT = "https://api.groq.com/openai/v1/audio/transcriptions"
 
+# Whisper's language names -> the three labels the live widget shows.
+# Hinglish has no ISO code; Whisper transcribes it as "english" or "hindi"
+# depending on which language dominates the segment, so the widget falls
+# back to script/word heuristics (see extractor-side detection) when needed.
+_LANGUAGE_LABELS = {"english": "English", "hindi": "Hindi"}
+
+
+@dataclass
+class TranscriptionResult:
+    text: str
+    language: str | None  # "English" | "Hindi" | None (unknown)
+
 
 class TranscriptionUnavailableError(RuntimeError):
     pass
 
 
-def transcribe_audio(audio_bytes: bytes, filename: str, language: str | None = None) -> str:
+def transcribe_audio(audio_bytes: bytes, filename: str, language: str | None = None) -> TranscriptionResult:
     settings = get_settings()
     if not settings.groq_api_key:
         raise TranscriptionUnavailableError(
@@ -27,7 +41,7 @@ def transcribe_audio(audio_bytes: bytes, filename: str, language: str | None = N
             "Set it in the environment to enable meeting capture."
         )
 
-    data = {"model": settings.groq_whisper_model, "response_format": "text"}
+    data = {"model": settings.groq_whisper_model, "response_format": "verbose_json"}
     # Whisper language hint: "en", "hi", ... (omit for auto-detect)
     if language:
         data["language"] = language.split("-")[0]
@@ -49,4 +63,8 @@ def transcribe_audio(audio_bytes: bytes, filename: str, language: str | None = N
         raise TranscriptionUnavailableError(
             f"Transcription failed ({response.status_code}): {response.text[:200]}"
         )
-    return response.text.strip()
+
+    payload = response.json()
+    text = str(payload.get("text", "")).strip()
+    detected = str(payload.get("language", "")).strip().lower()
+    return TranscriptionResult(text=text, language=_LANGUAGE_LABELS.get(detected))
